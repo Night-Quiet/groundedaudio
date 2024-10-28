@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from configuration_grounding_audio import GroundingAudioConfig
 
 """SpecAugment module."""
 from typing import Optional, Sequence, Union

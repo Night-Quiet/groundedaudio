@@ -61,11 +61,12 @@ def sensevoice_pytorch_load(model_dir):
 
 
 def bert_pytorch_save(model_dir, save_dir=None):
-    tokenizer = BertTokenizer.from_pretrained(model_dir)
     model = BertModel.from_pretrained(model_dir)
-
-    tokenizer.save_pretrained("/root/groundingaudio/sensevoice_pytorch")
-    model.save_pretrained("/root/groundingaudio/sensevoice_pytorch")
+    state_dict = model.state_dict()
+    pop_keys = [key for key in state_dict.keys() if "pooler.dense" in key]
+    for key in pop_keys:
+        state_dict.pop(key)
+    torch.save(state_dict, "/root/groundingaudio_pretrained/text_encoder.pt")
 
 
 def json_load(path):
@@ -200,9 +201,9 @@ def audioset_csv_process():
 if __name__ == "__main__":
     # sensevoice_pytorch_save("/root/groundingaudio/SenseVoiceSmall", "/root/groundingaudio/sensevoice_pytorch")
     # sensevoice_pytorch_load("/root/groundingaudio/sensevoice_pytorch")
-    # bert_pytorch_save("/root/autodl-tmp/bert-base-uncased")
+    bert_pytorch_save("/root/autodl-tmp/bert-base-uncased")
     # audioset_csv_process()
-    audioset_strong_copy()
+    # audioset_strong_copy()
     pass
 
 

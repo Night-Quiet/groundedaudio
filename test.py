@@ -17,14 +17,15 @@ import requests
 from PIL import Image
 from datasets import load_dataset
 
-from processing_grounding_audio import GroundingAudioProcessor
+from groundingaudio.processing_grounding_audio import GroundingAudioProcessor
 
-from grounding_audio_model import GroundingAudioModel, GroundingAudioForObjectDetection
-from configuration_grounding_audio import GroundingAudioConfig
-from processing_grounding_audio import GroundingAudioProcessor
+from groundingaudio.grounding_audio_model import GroundingAudioModel, GroundingAudioForObjectDetection
+from groundingaudio.configuration_grounding_audio import GroundingAudioConfig
+from groundingaudio.processing_grounding_audio import GroundingAudioProcessor
+from groundingaudio.sensevoice_model import SenseVoiceSmall
 
 from transformers import AutoProcessor, GroundingDinoForObjectDetection
-from data_process import AudioSetSLPreprocessor
+from utils import AudioSetSLPreprocessor
 
 
 def groundingdino_inference_demo():
@@ -58,13 +59,13 @@ def groundingdino_inference_demo():
 
  
 def groundingaudio_inference_demo():
-    file_path = ["/root/groundingaudio/balanced/Y--aE2O5G5WE.wav", "/root/groundingaudio/balanced/Y--PJHxphWEs.wav"]
-    sentences = ["this is a speech, this is a output, this is a audio, this is a output, this is a audio", "this is a output, this is a audio, this is a output, this is a audio, this is a output, this is a audio"]
+    file_path = ["/root/autodl-tmp/audioset_strong/eval/Y--4gqARaEJE.wav", "/root/autodl-tmp/audioset_strong/eval/Y--BfvyPmVMo.wav"]
+    sentences = ["this is a speech. this is a output. this is a audio. this is a output. this is a audio", "this is a output. this is a audio. this is a output. this is a audio. this is a output. this is a audio"]
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     device = "cpu"
 
-    config = GroundingAudioConfig.from_json_file("./config.json")
-    processor = GroundingAudioProcessor.from_pretrained("./tokenizer_pretrained")
+    config = GroundingAudioConfig.from_json_file("/root/groundingaudio_pretrained/config.json")
+    processor = GroundingAudioProcessor.from_pretrained("/root/groundingaudio_pretrained")
 
     inputs = processor(audios=file_path, text=sentences, device=device)
     
@@ -120,9 +121,7 @@ def demo():
 
 
 if __name__ == "__main__":
-    # groundingdino_inference_demo()
     groundingaudio_inference_demo()
-    # demo()
-    # dataset = load_dataset("csv", data_files="./audioset/audioset_train_strong.tsv", delimiter="\t")
+
     
 

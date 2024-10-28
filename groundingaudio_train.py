@@ -17,7 +17,7 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundingaudio_pretrained"
-        self.data_json_path = "/root/groundingaudio/audioset/audioset_train_strong_transform.json"
+        self.data_json_path = "/root/groundingaudio/audioset/audioset_eval_strong_transform.json"
         self.data_audio_dir = "/root/autodl-tmp/audioset_strong/eval"
         self.output_dir = '/root/autodl-tmp/results'
         # train
@@ -62,6 +62,8 @@ dataset = load_dataset("json", data_files=cfg.data_json_path, split="train", kee
 processor = GroundingAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 preprocessor = AudioSetSLPreprocessor(processor=processor, audio_dir=cfg.data_audio_dir, device=device)
 dataset = dataset.map(preprocessor, batched=True, remove_columns=["segment_id", "class_labels", "boxes"], batch_size=1000).train_test_split(test_size=0.2, shuffle=True)
+
+exit()
 
 # trainer and train
 trainer = Trainer(

@@ -115,6 +115,8 @@ class GroundingAudioConfig(PretrainedConfig):
         backbone_config=None,
         text_config=None,
         backbone_layer=50,
+        backbone_load=None,
+        text_backbone_load=None,
         use_pretrained_backbone=False,
         use_timm_backbone=False,
         num_queries=900,
@@ -168,6 +170,8 @@ class GroundingAudioConfig(PretrainedConfig):
         self.text_config = text_config
 
         self.backbone_layer = backbone_layer
+        self.backbone_load = backbone_load
+        self.text_backbone_load = text_backbone_load
         self.use_pretrained_backbone = use_pretrained_backbone
         self.use_timm_backbone = use_timm_backbone
         self.num_queries = num_queries

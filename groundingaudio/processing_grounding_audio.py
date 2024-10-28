@@ -22,7 +22,7 @@ from transformers.feature_extraction_utils import BatchFeature
 from transformers.processing_utils import ProcessingKwargs, ProcessorMixin
 from transformers.utils import logging
 from transformers import FEATURE_EXTRACTOR_MAPPING
-from feature_extraction_grounding_audio import GroundingAudioFeatureExtractor
+from .feature_extraction_grounding_audio import GroundingAudioFeatureExtractor
 FEATURE_EXTRACTOR_MAPPING.register("GroundingAudioFeatureExtractor", GroundingAudioFeatureExtractor)
 
 
