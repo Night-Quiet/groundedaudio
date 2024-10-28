@@ -62,17 +62,13 @@ class GroundingAudioFeatureExtractor(SequenceFeatureExtractor):
         
     def __call__(
         self,
-        speech_files: Optional[list],
-        device: Optional[str] = "cpu",
+        raw_speech: Optional[list],
     ) -> BatchFeature:
-        raw_speech = load_audio_text_image_video(speech_files, fs=self.sampling_rate, data_type=self.data_type)
         speech, speech_lengths = extract_fbank(raw_speech, data_type=self.data_type, frontend=self.frontend)
-        speech = speech.to(device)
 
         if self.return_attention_mask:
             speech_mask = torch.arange(0, speech.shape[1]).unsqueeze(0).repeat(speech.shape[0], 1)
             speech_mask = (speech_mask < speech_lengths.unsqueeze(1)).int()
-            speech_mask = speech_mask.to(device)
             batched_speech = BatchFeature({"audio_values": speech,"audio_attention_mask": speech_mask})
         else:
             batched_speech = BatchFeature({"audio_values": speech})
