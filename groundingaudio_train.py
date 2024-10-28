@@ -17,8 +17,8 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundingaudio_pretrained"
-        self.data_json_path = "/root/groundingaudio/audioset/audioset_eval_strong_transform.json"
-        self.data_audio_dir = "/root/autodl-tmp/audioset_strong/eval"
+        self.data_json_path = "/root/groundingaudio/audioset/audioset_train_strong_transform.json"
+        self.data_audio_dir = "/root/autodl-tmp/audioset_strong/train"
         self.output_dir = '/root/autodl-tmp/results'
         # train
         self.start_epoch = 0
