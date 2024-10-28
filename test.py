@@ -47,7 +47,7 @@ def groundingdino_inference_demo():
 
     for _ in range(bs):
         target = {
-            "class_labels": torch.tensor([[3, 4, 5], [3, 4, 5]], device=device, dtype=torch.long),
+            "class_labels": torch.tensor([3, 5], device=device, dtype=torch.long),
             "boxes": torch.tensor([[344.8151,  23.1787, 637.3994, 373.8305], [ 11.9177,  51.5846, 316.5746, 472.8922]], device=device)
         }
         targets.append(target)
@@ -121,6 +121,7 @@ def demo():
 
 
 if __name__ == "__main__":
+    # groundingdino_inference_demo()
     groundingaudio_inference_demo()
 
     
