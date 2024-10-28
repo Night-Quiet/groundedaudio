@@ -58,12 +58,10 @@ model = GroundingAudioForObjectDetection(config)
 
 # dataset
 device = "cuda" if torch.cuda.is_available() else "cpu"
-dataset = load_dataset("json", data_files=cfg.data_json_path, split="train", keep_in_memory=True).select(range(100))
+dataset = load_dataset("json", data_files=cfg.data_json_path, split="train", keep_in_memory=True)
 processor = GroundingAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 preprocessor = AudioSetSLPreprocessor(processor=processor, audio_dir=cfg.data_audio_dir, device=device)
 dataset = dataset.map(preprocessor, batched=True, remove_columns=["segment_id", "class_labels", "boxes"], batch_size=1000).train_test_split(test_size=0.2, shuffle=True)
-
-exit()
 
 # trainer and train
 trainer = Trainer(

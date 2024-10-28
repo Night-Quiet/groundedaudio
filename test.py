@@ -88,7 +88,7 @@ def groundingaudio_inference_demo():
         token_type_ids=inputs.token_type_ids,
         labels=targets
     )
-    print(model_output)
+    print(model_output[0])
     pass
 
 
