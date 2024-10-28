@@ -58,7 +58,6 @@ class GroundingAudioProcessor(ProcessorMixin):
         self,
         audios=None,
         text=None,
-        device="cpu",
         **kwargs: Unpack[GroundingAudioProcessorKwargs],
     ) -> BatchFeature:
         output_kwargs = self._merge_kwargs(
@@ -67,10 +66,8 @@ class GroundingAudioProcessor(ProcessorMixin):
             **kwargs,
         )
 
-        audios_input = self.audio_processor(audios, device=device, **output_kwargs["audio_kwargs"])
-
+        audios_input = self.audio_processor(audios, **output_kwargs["audio_kwargs"])
         text_inputs = self.tokenizer(text, **output_kwargs["text_kwargs"])
-        text_inputs = {key: value.to(device) for key, value in text_inputs.items()}
         return BatchFeature(data={**text_inputs, **audios_input})
 
     @property
