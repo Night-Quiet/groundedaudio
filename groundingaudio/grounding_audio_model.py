@@ -393,7 +393,7 @@ def multi_scale_deformable_attention(
 
 
 # Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrMultiscaleDeformableAttention with DeformableDetr->GroundingDino, Deformable DETR->Grounding DINO
-class GroundingDinoMultiscaleDeformableAttention(nn.Module):
+class GroundingAudioMultiscaleDeformableAttention(nn.Module):
     """
     Multiscale deformable attention as proposed in Deformable DETR.
     """
@@ -411,7 +411,7 @@ class GroundingDinoMultiscaleDeformableAttention(nn.Module):
         # check if dim_per_head is power of 2
         if not ((dim_per_head & (dim_per_head - 1) == 0) and dim_per_head != 0):
             warnings.warn(
-                "You'd better set embed_dim (d_model) in GroundingDinoMultiscaleDeformableAttention to make the"
+                "You'd better set embed_dim (d_model) in GroundingAudioMultiscaleDeformableAttention to make the"
                 " dimension of each attention head a power of 2 which is more efficient in the authors' CUDA"
                 " implementation."
             )
@@ -462,7 +462,7 @@ class GroundingDinoMultiscaleDeformableAttention(nn.Module):
         attention_weights = F.softmax(attention_weights, -1).view(
             batch_size, num_queries, self.n_heads, self.n_points
         )
-        sampling_locations = (reference_points[:, :, None, :, :1] + sampling_offsets)
+        sampling_locations = (reference_points[:, :, None, :, :1] + sampling_offsets / attention_mask.sum(-1)[:, None, None, None, None])
 
         output = multi_scale_deformable_attention(value, sampling_locations, attention_weights)
         output = self.output_proj(output)
@@ -780,7 +780,7 @@ class GroundingAudioDeformableLayer(nn.Module):
     def __init__(self, config: GroundingAudioConfig):
         super().__init__()
         self.embed_dim = config.d_model
-        self.self_attn = GroundingDinoMultiscaleDeformableAttention(
+        self.self_attn = GroundingAudioMultiscaleDeformableAttention(
             config, num_heads=config.encoder_attention_heads, n_points=config.encoder_n_points
         )
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, config.layer_norm_eps)
@@ -1054,7 +1054,7 @@ class GroundingAudioDecoderLayer(nn.Module):
         )
         self.encoder_attn_text_layer_norm = nn.LayerNorm(self.embed_dim, config.layer_norm_eps)
         # cross-attention
-        self.encoder_attn = GroundingDinoMultiscaleDeformableAttention(
+        self.encoder_attn = GroundingAudioMultiscaleDeformableAttention(
             config,
             num_heads=config.decoder_attention_heads,
             n_points=config.decoder_n_points,
@@ -1179,7 +1179,7 @@ class GroundingAudioPreTrainedModel(PreTrainedModel):
         if isinstance(module, GroundingAudioLearnedPositionEmbedding):
             nn.init.uniform_(module.row_embeddings.weight)
             nn.init.uniform_(module.column_embeddings.weight)
-        elif isinstance(module, GroundingDinoMultiscaleDeformableAttention):
+        elif isinstance(module, GroundingAudioMultiscaleDeformableAttention):
             nn.init.constant_(module.sampling_offsets.weight.data, 0.0)
             default_dtype = torch.get_default_dtype()
             thetas = torch.arange(module.n_heads // 2, dtype=torch.int64).to(default_dtype) * (
@@ -1307,7 +1307,6 @@ class GroundingAudioEncoder(GroundingAudioPreTrainedModel):
         text_position_ids: Optional[Tensor] = None,
         return_dict=None,
     ):
-        reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=audio_features.device)
 
         for i, encoder_layer in enumerate(self.layers):
             (audio_features, text_features), attentions = encoder_layer(
@@ -1315,7 +1314,6 @@ class GroundingAudioEncoder(GroundingAudioPreTrainedModel):
                 audio_position_embedding=audio_position_embedding,
                 audio_self_attention_maks=audio_self_attention_maks,
                 key_padding_mask=audio_attention_mask,
-                reference_points=reference_points,
                 text_features=text_features,
                 text_attention_mask=text_attention_mask,
                 text_position_embedding=text_position_embedding,
