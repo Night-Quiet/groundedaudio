@@ -69,7 +69,7 @@ class GroundedAudioFeatureExtractor(SequenceFeatureExtractor):
         if self.return_attention_mask:
             speech_mask = torch.arange(0, speech.shape[1]).unsqueeze(0).repeat(speech.shape[0], 1)
             speech_mask = (speech_mask < speech_lengths.unsqueeze(1)).int()
-            batched_speech = BatchFeature({"audio_values": speech,"audio_mask": speech_mask})
+            batched_speech = BatchFeature({"audio_values": speech, "audio_mask": speech_mask})
         else:
             batched_speech = BatchFeature({"audio_values": speech})
         return batched_speech
