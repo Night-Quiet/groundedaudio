@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import json
@@ -64,22 +64,22 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundedaudio_pretrained"
-        self.data_json_path = "/root/groundedaudio/audioset/audioset_eval_strong_transform.json"
-        self.data_audio_dir = "/root/autodl-tmp/audioset_strong/eval"
-        self.output_dir = '/root/results/gaudio'
+        self.data_json_path = "/root/groundedaudio/audioset/audioset_train_strong_transform.json"
+        self.data_audio_dir = "/root/autodl-tmp/audioset_strong/train"
+        self.output_dir = '/root/autodl-tmp/gaudio'
         self.cache_dir = "/root/autodl-tmp/.cache"
         # train
         self.start_epoch = 0
         self.num_train_epochs = 30
-        self.per_device_train_batch_size = 4
-        self.per_device_eval_batch_size = 4
+        self.per_device_train_batch_size = 64
+        self.per_device_eval_batch_size = 64
         self.eval_strategy="epoch"
         self.save_strategy="epoch"
         self.dataloader_num_workers=10
         self.seed=100
         self.neftune_noise_alpha=None
         # log
-        self.report_to="tensorboard"
+        # self.report_to="tensorboard"
         self.logging_steps=100
         self.run_name="gaudio_origin"
         # optimizer
@@ -113,7 +113,7 @@ params = [param for param in model.parameters() if param.requires_grad]
 optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay, betas=cfg.betas)
 
 # dataset
-dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, keep_in_memory=False, split="train", cache_dir=cfg.cache_dir).select(range(20))
+dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, keep_in_memory=False, split="train", cache_dir=cfg.cache_dir)
 processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
 dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
@@ -132,7 +132,10 @@ trainer = Trainer(
         weight_decay=cfg.weight_decay,
         eval_strategy=cfg.eval_strategy,
         save_strategy=cfg.save_strategy,
-        remove_unused_columns=False
+        bf16=True,
+        bf16_full_eval=True,
+        remove_unused_columns=False,
+        do_train=True
     ),
     train_dataset=dataset['train'],
     eval_dataset=dataset['test'],

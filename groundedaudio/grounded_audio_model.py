@@ -290,7 +290,7 @@ class GroundedAudioConvEncoder(nn.Module):
         out = []
         for feature_map in features:
             # downsample audio_mask to match shape of corresponding feature_map
-            mask = nn.functional.interpolate(audio_mask[None].float(), size=feature_map.shape[-2:]).to(torch.bool)[0]
+            mask = nn.functional.interpolate(audio_mask[None].float().to(audio_values.dtype), size=feature_map.shape[-2:]).to(torch.bool)[0]
             out.append((feature_map, mask))
         return out
 
@@ -327,10 +327,10 @@ class GroundedAudioSinePositionEmbedding(nn.Module):
         self.scale = 2 * math.pi
 
     def forward(self, audio_values, audio_mask):
-        x_embed = audio_mask.cumsum(1, dtype=torch.float32)
+        x_embed = audio_mask.cumsum(1, dtype=audio_values.dtype)
         eps = 1e-6
         x_embed = x_embed / (x_embed[:, -1:] + eps) * self.scale
-        dim_t = torch.arange(self.embedding_dim, dtype=torch.float32, device=audio_values.device)
+        dim_t = torch.arange(self.embedding_dim, dtype=audio_values.dtype, device=audio_values.device)
         dim_t = self.temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / self.embedding_dim)
 
         pos = x_embed[:, :, None] / dim_t
@@ -858,7 +858,7 @@ class GroundedAudioDeformableLayer(nn.Module):
 
 # Based on https://github.com/IDEA-Research/GroundedAudio/blob/2b62f419c292ca9c518daae55512fabc3fead4a4/GroundedAudio/models/GroundedAudio/utils.py#L24
 def get_sine_pos_embed(
-    pos_tensor: torch.Tensor, num_pos_feats: int = 128, temperature: int = 10000, exchange_xy: bool = True
+    pos_tensor: torch.Tensor, dtype, num_pos_feats: int = 128, temperature: int = 10000, exchange_xy: bool = True
 ) -> Tensor:
     """
     Generate sine position embeddings from a position tensor.
@@ -877,7 +877,7 @@ def get_sine_pos_embed(
         position_embeddings (torch.Tensor): shape: [..., n * hidden_size].
     """
     scale = 2 * math.pi
-    dim_t = torch.arange(num_pos_feats, dtype=torch.float32, device=pos_tensor.device)
+    dim_t = torch.arange(num_pos_feats, dtype=dtype, device=pos_tensor.device)
     dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode="floor") / num_pos_feats)
 
     def sine_func(x: torch.Tensor):
@@ -890,7 +890,7 @@ def get_sine_pos_embed(
     if exchange_xy:
         position_embeddings[0], position_embeddings[1] = position_embeddings[1], position_embeddings[0]
     position_embeddings = torch.cat(position_embeddings, dim=-1)
-    return position_embeddings
+    return position_embeddings.to(dtype)
 
 
 class GroundedAudioEncoderLayer(nn.Module):
@@ -912,16 +912,16 @@ class GroundedAudioEncoderLayer(nn.Module):
     ) -> Tensor:
         batch_size, seq_length, _ = text_features.shape
         if text_position_embedding is None and text_position_ids is None:
-            text_position_embedding = torch.arange(seq_length, device=text_features.device)
-            text_position_embedding = text_position_embedding.float()
+            text_position_embedding = torch.arange(seq_length, device=text_features.device, dtype=text_features.dtype)
+            text_position_embedding = text_position_embedding.float().to(text_features.dtype)
             text_position_embedding = text_position_embedding.unsqueeze(0).unsqueeze(-1)
             text_position_embedding = text_position_embedding.repeat(batch_size, 1, 1)
             text_position_embedding = get_sine_pos_embed(
-                text_position_embedding, num_pos_feats=self.d_model, exchange_xy=False
+                text_position_embedding, num_pos_feats=self.d_model, exchange_xy=False, dtype=text_features.dtype
             )
         if text_position_ids is not None:
             text_position_embedding = get_sine_pos_embed(
-                text_position_ids[..., None], num_pos_feats=self.d_model, exchange_xy=False
+                text_position_ids[..., None], num_pos_feats=self.d_model, exchange_xy=False, dtype=text_features.dtype
             )
 
         return text_position_embedding
@@ -1396,7 +1396,7 @@ class GroundedAudioDecoder(GroundedAudioPreTrainedModel):
 
         for idx, decoder_layer in enumerate(self.layers):
             reference_points_input = reference_points[:, :, None]
-            query_pos = get_sine_pos_embed(reference_points_input[:, :, 0, :], num_pos_feats=self.config.d_model // 2)
+            query_pos = get_sine_pos_embed(reference_points_input[:, :, 0, :], num_pos_feats=self.config.d_model // 2, dtype=audio_encoder_hidden_states.dtype)
             query_pos = self.reference_points_head(query_pos)
 
             if self.gradient_checkpointing and self.training:
@@ -1592,7 +1592,7 @@ class GroundedAudioModel(GroundedAudioPreTrainedModel):
 
     def generate_encoder_output_proposals(self, enc_output, padding_mask):
         batch_size, seq_len = enc_output.shape[:2]
-        grid = torch.linspace(0, seq_len-1, seq_len, dtype=torch.float32, device=enc_output.device).unsqueeze(0).expand(batch_size, -1).unsqueeze(-1)
+        grid = torch.linspace(0, seq_len-1, seq_len, dtype=enc_output.dtype, device=enc_output.device).unsqueeze(0).expand(batch_size, -1).unsqueeze(-1)
         scale = torch.sum(~padding_mask, dim=1).unsqueeze(-1).unsqueeze(-1)
         grid = grid / scale
         width = torch.ones_like(grid) * 0.05
@@ -1642,7 +1642,7 @@ class GroundedAudioModel(GroundedAudioPreTrainedModel):
         text_outputs = self.text_backbone(input_ids, text_self_attention_masks, token_type_ids, position_ids, return_dict=return_dict)
         text_features = text_outputs.last_hidden_state if return_dict else text_outputs[0]
         text_features = self.text_projection(text_features)
-
+        
         batch_size, audio_len, embedding_dim = audio_values.shape
 
         audio_features, position_embeddings, audio_mask = self.backbone(audio_values, audio_mask)
@@ -1790,7 +1790,7 @@ def box_area(boxes: Tensor) -> Tensor:
     Returns:
         `torch.FloatTensor`: a tensor containing the area for each box.
     """
-    boxes = _upcast(boxes)
+    # boxes = _upcast(boxes)
     return boxes[:, 1] - boxes[:, 0]
 
 
@@ -1970,7 +1970,7 @@ class GroundedAudioHungarianMatcher(nn.Module):
         # # [batch size*num_query, batch size*num_labels*len_labels]
 
         # Compute the L1 cost between boxes: 不用管batch, 下面分开就好.
-        bbox_cost = torch.cdist(out_bbox, target_bbox, p=1)
+        bbox_cost = torch.cdist(out_bbox.float(), target_bbox.float(), p=1).to(out_prob.dtype)
 
         # Compute the giou cost between boxes
         giou_cost = -box_iou(center_to_corners_one_dim(out_bbox), center_to_corners_one_dim(target_bbox))
