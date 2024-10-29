@@ -960,7 +960,7 @@ class SenseVoiceEncoderSmall(nn.Module):
         """Embed positions in tensor."""
         all_hidden_state = list()
 
-        masks = sequence_mask(ilens, device=ilens.device)[:, None, :]
+        masks = sequence_mask(ilens, maxlen=xs_pad.shape[1], device=ilens.device)[:, None, :]
 
         xs_pad *= self.output_size() ** 0.5
 
