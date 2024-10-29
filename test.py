@@ -17,22 +17,22 @@ import requests
 from PIL import Image
 from datasets import load_dataset
 
-from groundingaudio.processing_grounding_audio import GroundingAudioProcessor
+from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
 
-from groundingaudio.grounding_audio_model import GroundingAudioModel, GroundingAudioForObjectDetection
-from groundingaudio.configuration_grounding_audio import GroundingAudioConfig
-from groundingaudio.processing_grounding_audio import GroundingAudioProcessor
-from groundingaudio.sensevoice_model import SenseVoiceSmall
+from groundedaudio.grounded_audio_model import GroundedAudioModel, GroundedAudioForObjectDetection
+from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
+from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
+from groundedaudio.sensevoice_model import SenseVoiceSmall
 
 from transformers import AutoProcessor, GroundingDinoForObjectDetection
 from utils import AudioSetSLPreprocessor
 
 
-def groundingdino_inference_demo():
-    # from grounding_audio_model_origin import GroundingDinoModel
+def groundeddino_inference_demo():
+    # from grounded_audio_model_origin import GroundedDinoModel
     # from transformers import AutoProcessor
 
-    model_id = "/root/autodl-tmp/grounding-dino-tiny"
+    model_id = "/root/autodl-tmp/grounded-dino-tiny"
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     processor = AutoProcessor.from_pretrained(model_id)
@@ -58,14 +58,14 @@ def groundingdino_inference_demo():
     print(outputs.loss)
 
  
-def groundingaudio_inference_demo():
+def groundedaudio_inference_demo():
     file_path = ["/root/autodl-tmp/audioset_strong/eval/Y--4gqARaEJE.wav", "/root/autodl-tmp/audioset_strong/eval/Y--BfvyPmVMo.wav"]
     sentences = ["this is a speech. this is a output. this is a audio. this is a output. this is a audio", "this is a output. this is a audio. this is a output. this is a audio. this is a output. this is a audio"]
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     device = "cpu"
 
-    config = GroundingAudioConfig.from_json_file("/root/groundingaudio_pretrained/config.json")
-    processor = GroundingAudioProcessor.from_pretrained("/root/groundingaudio_pretrained")
+    config = GroundedAudioConfig.from_json_file("/root/groundedaudio_pretrained/config.json")
+    processor = GroundedAudioProcessor.from_pretrained("/root/groundedaudio_pretrained")
 
     inputs = processor(audios=file_path, text=sentences, device=device)
     
@@ -79,7 +79,7 @@ def groundingaudio_inference_demo():
         }
         targets.append(target)
 
-    model = GroundingAudioForObjectDetection(config).to(device)
+    model = GroundedAudioForObjectDetection(config).to(device)
     model_output = model(
         audio_values=inputs.audio_values,
         audio_mask=inputs.audio_attention_mask,
@@ -102,8 +102,8 @@ def demo():
     image = Image.open("11.jpg")
     text = "blue cloth. red cloth"
 
-    processor = AutoProcessor.from_pretrained("/root/autodl-tmp/grounding-dino-tiny")
-    model = GroundingDinoForObjectDetection.from_pretrained("/root/autodl-tmp/grounding-dino-tiny")
+    processor = AutoProcessor.from_pretrained("/root/autodl-tmp/grounded-dino-tiny")
+    model = GroundingDinoForObjectDetection.from_pretrained("/root/autodl-tmp/grounded-dino-tiny")
 
     inputs = processor(images=image, text=text, return_tensors="pt")
     outputs = model(**inputs)
@@ -121,10 +121,10 @@ def demo():
 
 
 if __name__ == "__main__":
-    # groundingdino_inference_demo()
-    # groundingaudio_inference_demo()
-    # processor = GroundingAudioProcessor.from_pretrained("/root/groundingaudio_pretrained")
-    # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file="/root/groundingaudio/audioset/audioset_eval_strong_transform.json")
+    # groundeddino_inference_demo()
+    # groundedaudio_inference_demo()
+    # processor = GroundedAudioProcessor.from_pretrained("/root/groundedaudio_pretrained")
+    # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file="/root/groundedaudio/audioset/audioset_eval_strong_transform.json")
     # dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong/eval", drop_labels=True, split="train").select(range(40))
     # dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"], batch_size=20)
     # for key, value in dataset[0].items():
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     # bert_config = AutoConfig.from_pretrained("/root/autodl-tmp/bert-base-uncased")
     # print(bert_config.__class__())
     # print(bert_config.to_json_string())
-    model = GroundingAudioForObjectDetection.from_pretrained("/root/autodl-tmp/results/10-29-11-24/checkpoint-40")
+    model = GroundedAudioForObjectDetection.from_pretrained("/root/autodl-tmp/results/10-29-11-53/checkpoint-40")
     print(model.config)
     
 

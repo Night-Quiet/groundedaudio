@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Feature extractor class for Grounding Audio
+Feature extractor class for Grounded Audio
 """
 
 from typing import List, Optional, Union
@@ -36,7 +36,7 @@ if is_torch_available():
 
 logger = logging.get_logger(__name__)
 
-class GroundingAudioFeatureExtractor(SequenceFeatureExtractor):
+class GroundedAudioFeatureExtractor(SequenceFeatureExtractor):
     model_input_names = ["audio_values"]
 
     def __init__(

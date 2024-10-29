@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch Grounding Audio model."""
+"""PyTorch Grounded Audio model."""
 
 import copy
 import math
@@ -40,7 +40,7 @@ from transformers.utils import is_accelerate_available, logging
 from transformers.utils.backbone_utils import load_backbone
 from transformers import AutoModel
 from .sensevoice_model import SenseVoiceSmall
-from .configuration_grounding_audio import GroundingAudioConfig
+from .configuration_grounded_audio import GroundedAudioConfig
 
 if is_accelerate_available():
     from accelerate import PartialState
@@ -111,9 +111,9 @@ logger = logging.get_logger(__name__)
 
 
 @dataclass
-class GroundingAudioDecoderOutput(ModelOutput):
+class GroundedAudioDecoderOutput(ModelOutput):
     """
-    Base class for outputs of the GroundingAudioDecoder. This class adds two attributes to
+    Base class for outputs of the GroundedAudioDecoder. This class adds two attributes to
     BaseModelOutputWithCrossAttentions, namely:
     - a stacked tensor of intermediate decoder hidden states (i.e. the output of each decoder layer)
     - a stacked tensor of intermediate reference points.
@@ -143,13 +143,13 @@ class GroundingAudioDecoderOutput(ModelOutput):
 
 
 @dataclass
-class GroundingAudioEncoderOutput(ModelOutput):
+class GroundedAudioEncoderOutput(ModelOutput):
     last_hidden_state_audio: torch.FloatTensor = None
     last_hidden_state_text: torch.FloatTensor = None
 
 
 @dataclass
-class GroundingAudioModelOutput(ModelOutput):
+class GroundedAudioModelOutput(ModelOutput):
     last_hidden_state: torch.FloatTensor = None
     init_reference_points: torch.FloatTensor = None
     intermediate_hidden_states: torch.FloatTensor = None
@@ -161,7 +161,7 @@ class GroundingAudioModelOutput(ModelOutput):
 
 
 @dataclass
-class GroundingDinoObjectDetectionOutput(ModelOutput):
+class GroundedAudioObjectDetectionOutput(ModelOutput):
     loss: Optional[torch.FloatTensor] = None
     loss_dict: Optional[Dict] = None
     logits: torch.FloatTensor = None
@@ -175,8 +175,8 @@ class GroundingDinoObjectDetectionOutput(ModelOutput):
     encoder_last_hidden_state_text: Optional[torch.FloatTensor] = None
 
 
-# Copied from transformers.models.detr.modeling_detr.DetrFrozenBatchNorm2d with Detr->GroundingDino
-class GroundingDinoFrozenBatchNorm2d(nn.Module):
+# Copied from transformers.models.detr.modeling_detr.DetrFrozenBatchNorm2d with Detr->GroundedAudio
+class GroundedAudioFrozenBatchNorm2d(nn.Module):
     """
     BatchNorm2d where the batch statistics and the affine parameters are fixed.
 
@@ -215,11 +215,11 @@ class GroundingDinoFrozenBatchNorm2d(nn.Module):
         return x * scale + bias
 
 
-# Copied from transformers.models.detr.modeling_detr.replace_batch_norm with Detr->GroundingDino
+# Copied from transformers.models.detr.modeling_detr.replace_batch_norm with Detr->GroundedAudio
 def replace_batch_norm(model):
     for name, module in model.named_children():
         if isinstance(module, nn.BatchNorm2d):
-            new_module = GroundingDinoFrozenBatchNorm2d(module.num_features)
+            new_module = GroundedAudioFrozenBatchNorm2d(module.num_features)
 
             if not module.weight.device == torch.device("meta"):
                 new_module.weight.data.copy_(module.weight)
@@ -233,11 +233,11 @@ def replace_batch_norm(model):
             replace_batch_norm(module)
 
 
-class GroundingDinoConvEncoder(nn.Module):
+class GroundedAudioConvEncoder(nn.Module):
     """
     Convolutional backbone, using either the AutoBackbone API or one from the timm library.
 
-    nn.BatchNorm2d layers are replaced by GroundingDinoFrozenBatchNorm2d as defined above.
+    nn.BatchNorm2d layers are replaced by GroundedAudioFrozenBatchNorm2d as defined above.
 
     """
 
@@ -282,7 +282,7 @@ class GroundingDinoConvEncoder(nn.Module):
                     if "stage.1" not in name and "stage.2" not in name and "stage.3" not in name:
                         parameter.requires_grad_(False)
 
-    # Copied from transformers.models.detr.modeling_detr.DetrConvEncoder.forward with Detr->GroundingDino
+    # Copied from transformers.models.detr.modeling_detr.DetrConvEncoder.forward with Detr->GroundedAudio
     def forward(self, audio_values: torch.Tensor, audio_mask: torch.Tensor):
         # send audio_values through the model to get list of feature maps
         features = self.model(audio_values) if self.config.use_timm_backbone else self.model(audio_values).feature_maps
@@ -295,8 +295,8 @@ class GroundingDinoConvEncoder(nn.Module):
         return out
 
 
-# Copied from transformers.models.detr.modeling_detr.DetrConvModel with Detr->GroundingDino
-class GroundingAudioConvModel(nn.Module):
+# Copied from transformers.models.detr.modeling_detr.DetrConvModel with Detr->GroundedAudio
+class GroundedAudioConvModel(nn.Module):
     """
     This module adds 2D position embeddings to all intermediate feature maps of the convolutional encoder.
     """
@@ -314,7 +314,7 @@ class GroundingAudioConvModel(nn.Module):
         return out[self.backbone_layer], pos, audio_mask
 
 
-class GroundingAudioSinePositionEmbedding(nn.Module):
+class GroundedAudioSinePositionEmbedding(nn.Module):
     """
     This is a more standard version of the position embedding, very similar to the one used by the Attention is all you
     need paper, generalized to work on images.
@@ -338,7 +338,7 @@ class GroundingAudioSinePositionEmbedding(nn.Module):
         return pos
 
 
-class GroundingAudioLearnedPositionEmbedding(nn.Module):
+class GroundedAudioLearnedPositionEmbedding(nn.Module):
     """
     This module learns positional embeddings up to a fixed maximum size.
     """
@@ -365,9 +365,9 @@ class GroundingAudioLearnedPositionEmbedding(nn.Module):
 
 def build_position_encoding(config):
     if config.position_embedding_type == "sine":
-        position_embedding = GroundingAudioSinePositionEmbedding(config)
+        position_embedding = GroundedAudioSinePositionEmbedding(config)
     elif config.position_embedding_type == "learned":
-        position_embedding = GroundingAudioLearnedPositionEmbedding(config)
+        position_embedding = GroundedAudioLearnedPositionEmbedding(config)
     else:
         raise ValueError(f"Not supported {config.position_embedding_type}")
 
@@ -392,13 +392,13 @@ def multi_scale_deformable_attention(
     return output
 
 
-# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrMultiscaleDeformableAttention with DeformableDetr->GroundingDino, Deformable DETR->Grounding DINO
-class GroundingAudioMultiscaleDeformableAttention(nn.Module):
+# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrMultiscaleDeformableAttention with DeformableDetr->GroundedAudio, Deformable DETR->Grounded Audio
+class GroundedAudioMultiscaleDeformableAttention(nn.Module):
     """
     Multiscale deformable attention as proposed in Deformable DETR.
     """
 
-    def __init__(self, config: GroundingAudioConfig, num_heads: int, n_points: int):
+    def __init__(self, config: GroundedAudioConfig, num_heads: int, n_points: int):
         super().__init__()
 
         kernel_loaded = MultiScaleDeformableAttention is not None
@@ -411,7 +411,7 @@ class GroundingAudioMultiscaleDeformableAttention(nn.Module):
         # check if dim_per_head is power of 2
         if not ((dim_per_head & (dim_per_head - 1) == 0) and dim_per_head != 0):
             warnings.warn(
-                "You'd better set embed_dim (d_model) in GroundingAudioMultiscaleDeformableAttention to make the"
+                "You'd better set embed_dim (d_model) in GroundedAudioMultiscaleDeformableAttention to make the"
                 " dimension of each attention head a power of 2 which is more efficient in the authors' CUDA"
                 " implementation."
             )
@@ -470,12 +470,12 @@ class GroundingAudioMultiscaleDeformableAttention(nn.Module):
         return output, attention_weights
 
 
-class GroundingAudioTextEnhancerLayer(nn.Module):
+class GroundedAudioTextEnhancerLayer(nn.Module):
     """Vanilla Transformer with text embeddings as input"""
 
     def __init__(self, config):
         super().__init__()
-        self.self_attn = GroundingAudioMultiheadAttention(
+        self.self_attn = GroundedAudioMultiheadAttention(
             config, num_attention_heads=config.encoder_attention_heads // 2
         )
 
@@ -500,7 +500,7 @@ class GroundingAudioTextEnhancerLayer(nn.Module):
         position_embeddings: Optional[torch.FloatTensor] = None,
     ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         """Text self-attention to enhance projection of text features generated by
-        the text encoder (AutoModel based on text_config) within GroundingAudioEncoderLayer
+        the text encoder (AutoModel based on text_config) within GroundedAudioEncoderLayer
 
         Args:
             hidden_states (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_dim)`):
@@ -552,7 +552,7 @@ class GroundingAudioTextEnhancerLayer(nn.Module):
         return hidden_states, attention_weights
 
 
-class GroundingAudioBiMultiHeadAttention(nn.Module):
+class GroundedAudioBiMultiHeadAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
 
@@ -724,8 +724,8 @@ def drop_path(input: torch.Tensor, drop_prob: float = 0.0, training: bool = Fals
     return output
 
 
-# Copied from transformers.models.beit.modeling_beit.BeitDropPath with Beit->GroundingDino
-class GroundingAudioDropPath(nn.Module):
+# Copied from transformers.models.beit.modeling_beit.BeitDropPath with Beit->GroundedAudio
+class GroundedAudioDropPath(nn.Module):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks)."""
 
     def __init__(self, drop_prob: Optional[float] = None) -> None:
@@ -739,7 +739,7 @@ class GroundingAudioDropPath(nn.Module):
         return "p={}".format(self.drop_prob)
 
 
-class GroundingAudioFusionLayer(nn.Module):
+class GroundedAudioFusionLayer(nn.Module):
     def __init__(self, config):
         super().__init__()
         drop_path = config.fusion_droppath
@@ -747,10 +747,10 @@ class GroundingAudioFusionLayer(nn.Module):
         # pre layer norm
         self.layer_norm_audio = nn.LayerNorm(config.d_model, config.layer_norm_eps)
         self.layer_norm_text = nn.LayerNorm(config.d_model, config.layer_norm_eps)
-        self.attn = GroundingAudioBiMultiHeadAttention(config)
+        self.attn = GroundedAudioBiMultiHeadAttention(config)
 
         # add layer scale for training stability
-        self.drop_path = GroundingAudioDropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.drop_path = GroundedAudioDropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         init_values = 1e-4
         self.audio_param = nn.Parameter(init_values * torch.ones((config.d_model)), requires_grad=True)
         self.text_param = nn.Parameter(init_values * torch.ones((config.d_model)), requires_grad=True)
@@ -776,11 +776,11 @@ class GroundingAudioFusionLayer(nn.Module):
         return (audio_features, audio_attn), (text_features, text_attn)
 
 
-class GroundingAudioDeformableLayer(nn.Module):
-    def __init__(self, config: GroundingAudioConfig):
+class GroundedAudioDeformableLayer(nn.Module):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__()
         self.embed_dim = config.d_model
-        self.self_attn = GroundingAudioMultiscaleDeformableAttention(
+        self.self_attn = GroundedAudioMultiscaleDeformableAttention(
             config, num_heads=config.encoder_attention_heads, n_points=config.encoder_n_points
         )
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, config.layer_norm_eps)
@@ -856,7 +856,7 @@ class GroundingAudioDeformableLayer(nn.Module):
         return hidden_states, attn_weights
 
 
-# Based on https://github.com/IDEA-Research/GroundingDINO/blob/2b62f419c292ca9c518daae55512fabc3fead4a4/groundingdino/models/GroundingDINO/utils.py#L24
+# Based on https://github.com/IDEA-Research/GroundedAudio/blob/2b62f419c292ca9c518daae55512fabc3fead4a4/GroundedAudio/models/GroundedAudio/utils.py#L24
 def get_sine_pos_embed(
     pos_tensor: torch.Tensor, num_pos_feats: int = 128, temperature: int = 10000, exchange_xy: bool = True
 ) -> Tensor:
@@ -893,16 +893,16 @@ def get_sine_pos_embed(
     return position_embeddings
 
 
-class GroundingAudioEncoderLayer(nn.Module):
+class GroundedAudioEncoderLayer(nn.Module):
     def __init__(self, config) -> None:
         super().__init__()
 
         self.d_model = config.d_model
 
-        self.text_enhancer_layer = GroundingAudioTextEnhancerLayer(config)
-        self.fusion_layer = GroundingAudioFusionLayer(config)
-        # self.deformable_layer = GroundingAudioDeformableLayer(config)
-        self.audio_enhance_layer = GroundingAudioTextEnhancerLayer(config)
+        self.text_enhancer_layer = GroundedAudioTextEnhancerLayer(config)
+        self.fusion_layer = GroundedAudioFusionLayer(config)
+        # self.deformable_layer = GroundedAudioDeformableLayer(config)
+        self.audio_enhance_layer = GroundedAudioTextEnhancerLayer(config)
 
     def get_text_position_embeddings(
         self,
@@ -967,7 +967,7 @@ class GroundingAudioEncoderLayer(nn.Module):
         )
 
 
-class GroundingAudioMultiheadAttention(nn.Module):
+class GroundedAudioMultiheadAttention(nn.Module):
     """Equivalent implementation of nn.MultiheadAttention with `batch_first=True`."""
 
     def __init__(self, config, num_attention_heads=None):
@@ -1012,7 +1012,7 @@ class GroundingAudioMultiheadAttention(nn.Module):
 
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in GroundingAudioModel forward() function)
+            # Apply the attention mask is (precomputed for all layers in GroundedAudioModel forward() function)
             attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
@@ -1035,13 +1035,13 @@ class GroundingAudioMultiheadAttention(nn.Module):
         return outputs
 
 
-class GroundingAudioDecoderLayer(nn.Module):
-    def __init__(self, config: GroundingAudioConfig):
+class GroundedAudioDecoderLayer(nn.Module):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__()
         self.embed_dim = config.d_model
 
         # self-attention
-        self.self_attn = GroundingAudioMultiheadAttention(config, num_attention_heads=config.decoder_attention_heads)
+        self.self_attn = GroundedAudioMultiheadAttention(config, num_attention_heads=config.decoder_attention_heads)
 
         self.dropout = config.dropout
         self.activation_fn = ACT2FN[config.activation_function]
@@ -1049,12 +1049,12 @@ class GroundingAudioDecoderLayer(nn.Module):
 
         self.self_attn_layer_norm = nn.LayerNorm(self.embed_dim, config.layer_norm_eps)
         # cross-attention text
-        self.encoder_attn_text = GroundingAudioMultiheadAttention(
+        self.encoder_attn_text = GroundedAudioMultiheadAttention(
             config, num_attention_heads=config.decoder_attention_heads
         )
         self.encoder_attn_text_layer_norm = nn.LayerNorm(self.embed_dim, config.layer_norm_eps)
         # cross-attention
-        self.encoder_attn = GroundingAudioMultiscaleDeformableAttention(
+        self.encoder_attn = GroundedAudioMultiscaleDeformableAttention(
             config,
             num_heads=config.decoder_attention_heads,
             n_points=config.decoder_n_points,
@@ -1147,7 +1147,7 @@ class GroundingAudioDecoderLayer(nn.Module):
         return outputs
 
 
-class GroundingAudioContrastiveEmbedding(nn.Module):
+class GroundedAudioContrastiveEmbedding(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.max_text_len = config.max_text_len
@@ -1168,18 +1168,18 @@ class GroundingAudioContrastiveEmbedding(nn.Module):
         return new_output
 
 
-class GroundingAudioPreTrainedModel(PreTrainedModel):
-    config_class = GroundingAudioConfig
+class GroundedAudioPreTrainedModel(PreTrainedModel):
+    config_class = GroundedAudioConfig
     base_model_prefix = "model"
     main_input_name = "audio_values"
 
     def _init_weights(self, module):
         std = self.config.init_std
 
-        if isinstance(module, GroundingAudioLearnedPositionEmbedding):
+        if isinstance(module, GroundedAudioLearnedPositionEmbedding):
             nn.init.uniform_(module.row_embeddings.weight)
             nn.init.uniform_(module.column_embeddings.weight)
-        elif isinstance(module, GroundingAudioMultiscaleDeformableAttention):
+        elif isinstance(module, GroundedAudioMultiscaleDeformableAttention):
             nn.init.constant_(module.sampling_offsets.weight.data, 0.0)
             default_dtype = torch.get_default_dtype()
             thetas = torch.arange(module.n_heads // 2, dtype=torch.int64).to(default_dtype) * (
@@ -1201,7 +1201,7 @@ class GroundingAudioPreTrainedModel(PreTrainedModel):
             nn.init.constant_(module.value_proj.bias.data, 0.0)
             nn.init.xavier_uniform_(module.output_proj.weight.data)
             nn.init.constant_(module.output_proj.bias.data, 0.0)
-        elif isinstance(module, GroundingAudioBiMultiHeadAttention):
+        elif isinstance(module, GroundedAudioBiMultiHeadAttention):
             nn.init.xavier_uniform_(module.audio_proj.weight)
             module.audio_proj.bias.data.fill_(0)
             nn.init.xavier_uniform_(module.text_proj.weight)
@@ -1214,7 +1214,7 @@ class GroundingAudioPreTrainedModel(PreTrainedModel):
             module.out_audio_proj.bias.data.fill_(0)
             nn.init.xavier_uniform_(module.out_text_proj.weight)
             module.out_text_proj.bias.data.fill_(0)
-        elif isinstance(module, (GroundingAudioEncoderLayer, GroundingAudioDecoderLayer)):
+        elif isinstance(module, (GroundedAudioEncoderLayer, GroundedAudioDecoderLayer)):
             for p in module.parameters():
                 if p.dim() > 1:
                     nn.init.normal_(p, mean=0.0, std=std)
@@ -1228,7 +1228,7 @@ class GroundingAudioPreTrainedModel(PreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, GroundingAudioMLPPredictionHead):
+        elif isinstance(module, GroundedAudioMLPPredictionHead):
             nn.init.constant_(module.layers[-1].weight.data, 0)
             nn.init.constant_(module.layers[-1].bias.data, 0)
 
@@ -1239,26 +1239,26 @@ class GroundingAudioPreTrainedModel(PreTrainedModel):
             nn.init.normal_(module.level_embed)
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, GroundingAudioDecoder):
+        if isinstance(module, GroundedAudioDecoder):
             module.gradient_checkpointing = value
 
 
-class GroundingAudioEncoder(GroundingAudioPreTrainedModel):
+class GroundedAudioEncoder(GroundedAudioPreTrainedModel):
     """
     Transformer encoder consisting of *config.encoder_layers* deformable attention layers. Each layer is a
-    [`GroundingAudioEncoderLayer`].
+    [`GroundedAudioEncoderLayer`].
 
     The encoder updates the flattened multi-scale feature maps through multiple deformable attention layers.
 
     Args:
-        config: GroundingAudioConfig
+        config: GroundedAudioConfig
     """
 
-    def __init__(self, config: GroundingAudioConfig):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__(config)
 
         self.dropout = config.dropout
-        self.layers = nn.ModuleList([GroundingAudioEncoderLayer(config) for _ in range(config.encoder_layers)])
+        self.layers = nn.ModuleList([GroundedAudioEncoderLayer(config) for _ in range(config.encoder_layers)])
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1324,34 +1324,34 @@ class GroundingAudioEncoder(GroundingAudioPreTrainedModel):
         if not return_dict:
             enc_outputs = [audio_features, text_features]
             return tuple(v for v in enc_outputs if v is not None)
-        return GroundingAudioEncoderOutput(
+        return GroundedAudioEncoderOutput(
             last_hidden_state_audio=audio_features,
             last_hidden_state_text=text_features,
         )
 
 
-class GroundingAudioDecoder(GroundingAudioPreTrainedModel):
+class GroundedAudioDecoder(GroundedAudioPreTrainedModel):
     """
-    Transformer decoder consisting of *config.decoder_layers* layers. Each layer is a [`GroundingAudioDecoderLayer`].
+    Transformer decoder consisting of *config.decoder_layers* layers. Each layer is a [`GroundedAudioDecoderLayer`].
 
     The decoder updates the query embeddings through multiple self-attention and cross-attention layers.
 
-    Some tweaks for Grounding DINO:
+    Some tweaks for Grounded Audio:
 
     - `position_embeddings`, `reference_points`, `spatial_shapes` and `valid_ratios` are added to the forward pass.
     - it also returns a stack of intermediate outputs and reference points from all decoding layers.
 
     Args:
-        config: GroundingAudioConfig
+        config: GroundedAudioConfig
     """
 
-    def __init__(self, config: GroundingAudioConfig):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__(config)
 
         self.dropout = config.dropout
         self.layer_norm = nn.LayerNorm(config.d_model, config.layer_norm_eps)
-        self.layers = nn.ModuleList([GroundingAudioDecoderLayer(config) for _ in range(config.decoder_layers)])
-        self.reference_points_head = GroundingAudioMLPPredictionHead(
+        self.layers = nn.ModuleList([GroundedAudioDecoderLayer(config) for _ in range(config.decoder_layers)])
+        self.reference_points_head = GroundedAudioMLPPredictionHead(
             config.query_dim // 2 * config.d_model, config.d_model, config.d_model, 2
         )
         self.gradient_checkpointing = False
@@ -1403,7 +1403,7 @@ class GroundingAudioDecoder(GroundingAudioPreTrainedModel):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
-                        return module(*inputs, output_attentions)
+                        return module(*inputs, True)
 
                     return custom_forward
 
@@ -1459,7 +1459,7 @@ class GroundingAudioDecoder(GroundingAudioPreTrainedModel):
                 ]
                 if v is not None
             )
-        return GroundingAudioDecoderOutput(
+        return GroundedAudioDecoderOutput(
             last_hidden_state=hidden_states,
             intermediate_hidden_states=intermediate,
             intermediate_reference_points=intermediate_reference_points,
@@ -1510,8 +1510,8 @@ def generate_masks_with_special_tokens_and_transfer_map(input_ids: torch.LongTen
     return attention_mask, position_ids.to(torch.long)
 
 
-class GroundingAudioModel(GroundingAudioPreTrainedModel):
-    def __init__(self, config: GroundingAudioConfig):
+class GroundedAudioModel(GroundedAudioPreTrainedModel):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__(config)
 
         # Create backbone + positional encoding
@@ -1519,7 +1519,7 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
         if config.backbone_load is not None and os.path.exists(config.backbone_load):
             backbone.load_state_dict(torch.load(config.backbone_load))
         position_embeddings = build_position_encoding(config)
-        self.backbone = GroundingAudioConvModel(backbone, position_embeddings, config.backbone_layer)
+        self.backbone = GroundedAudioConvModel(backbone, position_embeddings, config.backbone_layer)
 
         self.input_proj_vision = nn.Sequential(
             nn.Linear(backbone.encoder_output_size, config.d_model),
@@ -1536,8 +1536,8 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
         if config.embedding_init_target or not config.two_stage:
             self.query_position_embeddings = nn.Embedding(config.num_queries, config.d_model)
 
-        self.encoder = GroundingAudioEncoder(config)
-        self.decoder = GroundingAudioDecoder(config)
+        self.encoder = GroundedAudioEncoder(config)
+        self.decoder = GroundedAudioDecoder(config)
 
         if config.two_stage:
             self.enc_output = nn.Linear(config.d_model, config.d_model)
@@ -1549,11 +1549,11 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
             ):
                 self.encoder_output_bbox_embed = self.decoder.bbox_embed
             else:
-                self.encoder_output_bbox_embed = GroundingAudioMLPPredictionHead(
+                self.encoder_output_bbox_embed = GroundedAudioMLPPredictionHead(
                     input_dim=config.d_model, hidden_dim=config.d_model, output_dim=2, num_layers=3
                 )
 
-            self.encoder_output_class_embed = GroundingAudioContrastiveEmbedding(config)
+            self.encoder_output_class_embed = GroundedAudioContrastiveEmbedding(config)
         else:
             self.reference_points = nn.Embedding(config.num_queries, 2)
 
@@ -1574,9 +1574,9 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
             param.requires_grad_(False)
 
     def unfreeze_backbone(self):
-        for name, param in self.backbone.conv_encoder.model.named_parameters():
+        for param in self.backbone.conv_encoder.parameters():
             param.requires_grad_(True)
-        for name, param in self.text_backbone.named_parameters():
+        for param in self.text_backbone.parameters():
             param.requires_grad_(True)
 
     def get_valid_ratio(self, mask):
@@ -1669,9 +1669,9 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
         
         # additional code end
 
-        # If the user passed a tuple for encoder_outputs, we wrap it in a GroundingAudioEncoderOutput when return_dict=True
-        elif return_dict and not isinstance(encoder_outputs, GroundingAudioEncoderOutput):
-            encoder_outputs = GroundingAudioEncoderOutput(
+        # If the user passed a tuple for encoder_outputs, we wrap it in a GroundedAudioEncoderOutput when return_dict=True
+        elif return_dict and not isinstance(encoder_outputs, GroundedAudioEncoderOutput):
+            encoder_outputs = GroundedAudioEncoderOutput(
                 last_hidden_state_audio=encoder_outputs[0],
                 last_hidden_state_text=encoder_outputs[1],
                 audio_hidden_states=encoder_outputs[2] if output_hidden_states else None,
@@ -1734,7 +1734,7 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
 
             return tuple_outputs
 
-        return GroundingAudioModelOutput(
+        return GroundedAudioModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
             init_reference_points=init_reference_points,
             intermediate_hidden_states=decoder_outputs.intermediate_hidden_states,
@@ -1747,7 +1747,7 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
 
 
 # Copied from transformers.models.detr.modeling_detr.DetrMLPPredictionHead
-class GroundingAudioMLPPredictionHead(nn.Module):
+class GroundedAudioMLPPredictionHead(nn.Module):
     """
     Very simple multi-layer perceptron (MLP, also called FFN), used to predict the normalized center coordinates,
     height and width of a bounding box w.r.t. an image.
@@ -1932,12 +1932,12 @@ def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
 
 def center_to_corners_one_dim(bbox):
     center, width = bbox.unbind(-1)
-    bbox_corners = torch.stack([(center - 0.5 * width), (center + 0.5 * width)], dim=-1)
+    bbox_corners = torch.stack([(center - width), (center + width)], dim=-1)
     return bbox_corners
 
 
-# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrHungarianMatcher with DeformableDetr->GroundingDino
-class GroundingAudioHungarianMatcher(nn.Module):
+# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrHungarianMatcher with DeformableDetr->GroundedAudio
+class GroundedAudioHungarianMatcher(nn.Module):
     def __init__(self, class_cost: float = 1, bbox_cost: float = 1, giou_cost: float = 1):
         super().__init__()
         requires_backends(self, ["scipy"])
@@ -1985,8 +1985,8 @@ class GroundingAudioHungarianMatcher(nn.Module):
         return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 
 
-# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrLoss with DeformableDetr->GroundingDino
-class GroundingAudioLoss(nn.Module):
+# Copied from transformers.models.deformable_detr.modeling_deformable_detr.DeformableDetrLoss with DeformableDetr->GroundedAudio
+class GroundedAudioLoss(nn.Module):
     def __init__(self, matcher, num_classes, focal_alpha, losses):
         super().__init__()
         self.matcher = matcher
@@ -2143,25 +2143,25 @@ class GroundingAudioLoss(nn.Module):
         return losses
 
 
-class GroundingAudioForObjectDetection(GroundingAudioPreTrainedModel):
+class GroundedAudioForObjectDetection(GroundedAudioPreTrainedModel):
     # When using clones, all layers > 0 will be clones, but layer 0 *is* required
     # the bbox_embed in the decoder are all clones though
     _tied_weights_keys = [r"bbox_embed\.[1-9]\d*", r"model\.decoder\.bbox_embed\.[0-9]\d*"]
 
-    def __init__(self, config: GroundingAudioConfig):
+    def __init__(self, config: GroundedAudioConfig):
         super().__init__(config)
 
-        self.model = GroundingAudioModel(config)
-        _class_embed = GroundingAudioContrastiveEmbedding(config)
+        self.model = GroundedAudioModel(config)
+        _class_embed = GroundedAudioContrastiveEmbedding(config)
 
         if config.decoder_bbox_embed_share:
-            _bbox_embed = GroundingAudioMLPPredictionHead(
+            _bbox_embed = GroundedAudioMLPPredictionHead(
                 input_dim=config.d_model, hidden_dim=config.d_model, output_dim=2, num_layers=3
             )
             self.bbox_embed = nn.ModuleList([_bbox_embed for _ in range(config.decoder_layers)])
         else:
             for _ in range(config.decoder_layers):
-                _bbox_embed = GroundingAudioMLPPredictionHead(
+                _bbox_embed = GroundedAudioMLPPredictionHead(
                     input_dim=config.d_model, hidden_dim=config.d_model, output_dim=2, num_layers=3
                 )
                 self.bbox_embed = nn.ModuleList([_bbox_embed for _ in range(config.decoder_layers)])
@@ -2189,7 +2189,7 @@ class GroundingAudioForObjectDetection(GroundingAudioPreTrainedModel):
         token_type_ids: torch.LongTensor = None,
         attention_mask: torch.LongTensor = None,
         audio_mask: Optional[torch.BoolTensor] = None,
-        encoder_outputs: Optional[Union[GroundingAudioEncoderOutput, Tuple]] = None,
+        encoder_outputs: Optional[Union[GroundedAudioEncoderOutput, Tuple]] = None,
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
@@ -2200,7 +2200,7 @@ class GroundingAudioForObjectDetection(GroundingAudioPreTrainedModel):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
 
-        # First, sent images through Grounding DINO base model to obtain encoder + decoder outputs
+        # First, sent images through Grounded Audio base model to obtain encoder + decoder outputs
         outputs = self.model(
             audio_values=audio_values,
             input_ids=input_ids,
@@ -2251,12 +2251,12 @@ class GroundingAudioForObjectDetection(GroundingAudioPreTrainedModel):
         loss, loss_dict, auxiliary_outputs = None, None, None
         if labels is not None:
             # First: create the matcher
-            matcher = GroundingAudioHungarianMatcher(
+            matcher = GroundedAudioHungarianMatcher(
                 class_cost=self.config.class_cost, bbox_cost=self.config.bbox_cost, giou_cost=self.config.giou_cost
             )
             # Second: create the criterion
             losses = ["labels", "boxes", "cardinality"]
-            criterion = GroundingAudioLoss(
+            criterion = GroundedAudioLoss(
                 matcher=matcher,
                 num_classes=self.config.num_labels,
                 focal_alpha=self.config.focal_alpha,
@@ -2294,7 +2294,7 @@ class GroundingAudioForObjectDetection(GroundingAudioPreTrainedModel):
 
             return tuple_outputs
 
-        dict_outputs = GroundingDinoObjectDetectionOutput(
+        dict_outputs = GroundedAudioObjectDetectionOutput(
             loss=loss,
             loss_dict=loss_dict,
             logits=logits,

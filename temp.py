@@ -5,9 +5,9 @@ import torch
 import joblib
 import shutil
 from pathlib import Path
-from groundingaudio.sensevoice_model import SenseVoiceSmall
+from groundedaudio.sensevoice_model import SenseVoiceSmall
 from transformers import BertModel, BertTokenizer
-from groundingaudio.configuration_grounding_audio import GroundingAudioConfig
+from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
 
 from datasets import load_dataset
 import pandas as pd
@@ -39,7 +39,7 @@ def sensevoice_pytorch_load(model_dir):
     model_dir = Path(model_dir)
 
     # kwargs = joblib.load(model_dir / "kwargs.joblib")
-    config = GroundingAudioConfig.from_json_file("./config.json")
+    config = GroundedAudioConfig.from_json_file("./config.json")
 
     # model_conf = {}
     # deep_update(model_conf, kwargs.get("model_conf", {}))
@@ -66,7 +66,7 @@ def bert_pytorch_save(model_dir, save_dir=None):
     pop_keys = [key for key in state_dict.keys() if "pooler.dense" in key]
     for key in pop_keys:
         state_dict.pop(key)
-    torch.save(state_dict, "/root/groundingaudio_pretrained/text_encoder.pt")
+    torch.save(state_dict, "/root/groundedaudio_pretrained/text_encoder.pt")
 
 
 def json_load(path):
@@ -199,8 +199,8 @@ def audioset_csv_process():
 
 
 if __name__ == "__main__":
-    # sensevoice_pytorch_save("/root/groundingaudio/SenseVoiceSmall", "/root/groundingaudio/sensevoice_pytorch")
-    # sensevoice_pytorch_load("/root/groundingaudio/sensevoice_pytorch")
+    # sensevoice_pytorch_save("/root/groundedaudio/SenseVoiceSmall", "/root/groundedaudio/sensevoice_pytorch")
+    # sensevoice_pytorch_load("/root/groundedaudio/sensevoice_pytorch")
     bert_pytorch_save("/root/autodl-tmp/bert-base-uncased")
     # audioset_csv_process()
     # audioset_strong_copy()
