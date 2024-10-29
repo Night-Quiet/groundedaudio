@@ -123,13 +123,20 @@ def demo():
 if __name__ == "__main__":
     # groundingdino_inference_demo()
     # groundingaudio_inference_demo()
-    processor = GroundingAudioProcessor.from_pretrained("/root/groundingaudio_pretrained")
-    preprocessor = AudioSetSLPreprocessor(processor=processor, json_file="/root/groundingaudio/audioset/audioset_eval_strong_transform.json")
-    dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong/eval", drop_labels=True, split="train").select(range(40))
-    dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"], batch_size=20)
-    for key, value in dataset[0].items():
-        if key != "audio_values":
-            print(key, value)
+    # processor = GroundingAudioProcessor.from_pretrained("/root/groundingaudio_pretrained")
+    # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file="/root/groundingaudio/audioset/audioset_eval_strong_transform.json")
+    # dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong/eval", drop_labels=True, split="train").select(range(40))
+    # dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"], batch_size=20)
+    # for key, value in dataset[0].items():
+    #     if key != "audio_values":
+    #         print(key, value)
+    # print(torch.tensor(dataset[0]["audio_values"]).shape)
+    from transformers import AutoConfig
+    # bert_config = AutoConfig.from_pretrained("/root/autodl-tmp/bert-base-uncased")
+    # print(bert_config.__class__())
+    # print(bert_config.to_json_string())
+    model = GroundingAudioForObjectDetection.from_pretrained("/root/autodl-tmp/results/10-29-11-24/checkpoint-40")
+    print(model.config)
     
 
     
