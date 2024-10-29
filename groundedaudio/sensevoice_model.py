@@ -960,7 +960,7 @@ class SenseVoiceEncoderSmall(nn.Module):
         """Embed positions in tensor."""
         all_hidden_state = list()
 
-        masks = sequence_mask(ilens, maxlen=xs_pad.shape[1], device=ilens.device)[:, None, :]
+        masks = sequence_mask(ilens, maxlen=xs_pad.shape[1], device=ilens.device, dtype=xs_pad.dtype)[:, None, :]
 
         xs_pad *= self.output_size() ** 0.5
 
@@ -1033,22 +1033,22 @@ class SenseVoiceSmall(nn.Module):
             speech, speech_lengths = self.specaug(speech, speech_lengths)
 
         language = "auto"
-        language_query = self.embed(torch.LongTensor([[self.lid_dict[language] if language in self.lid_dict else 0]]).to(speech.device)).repeat(speech.size(0), 1, 1)
+        language_query = self.embed(torch.LongTensor([[self.lid_dict[language] if language in self.lid_dict else 0]]).to(device=speech.device)).repeat(speech.size(0), 1, 1)
         
         textnorm = "withitn"
-        textnorm_query = self.embed(torch.LongTensor([[self.textnorm_dict[textnorm]]]).to(speech.device)).repeat(speech.size(0), 1, 1)
+        textnorm_query = self.embed(torch.LongTensor([[self.textnorm_dict[textnorm]]]).to(device=speech.device)).repeat(speech.size(0), 1, 1)
         speech = torch.cat((textnorm_query, speech), dim=1)
         speech_lengths += 1
 
-        event_emo_query = self.embed(torch.LongTensor([[1, 2]]).to(speech.device)).repeat(speech.size(0), 1, 1)
+        event_emo_query = self.embed(torch.LongTensor([[1, 2]]).to(device=speech.device)).repeat(speech.size(0), 1, 1)
         input_query = torch.cat((language_query, event_emo_query), dim=1)
         speech = torch.cat((input_query, speech), dim=1)
         speech_lengths += 3
 
         encoder_out, encoder_out_lens, all_hidden_state = self.encoder(speech, speech_lengths)
 
-        speech_mask = torch.arange(0, speech.shape[1]).unsqueeze(0).repeat(speech.shape[0], 1).to(speech.device)
-        speech_mask = (speech_mask < speech_lengths.unsqueeze(1)).float()
+        speech_mask = torch.arange(0, speech.shape[1]).unsqueeze(0).repeat(speech.shape[0], 1).to(speech.device, dtype=speech.dtype)
+        speech_mask = (speech_mask < speech_lengths.unsqueeze(1)).float().to(speech.device, dtype=speech.dtype)
 
         return encoder_out, encoder_out_lens, all_hidden_state, speech_mask
 
