@@ -1,82 +1,73 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import json
-import numpy as np
 from time import localtime, time
 from datasets import load_dataset
 from datasets import load_dataset
 from transformers import TrainingArguments, Trainer
-from utils import AudioSetSLPreprocessor
 from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
 from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
 from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
+from utils import AudioSetSLPreprocessor
 
 
-class DataCollatorWithPadding:
-    def __init__(self, processor, json_file):
-        self.processor = processor
+from transformers import DataCollatorWithPadding
+import torch
 
-        with open(json_file, "r", encoding="utf-8") as f:
-            json_data = json.load(f)
-        segment_id2data = dict()
-        for data_i in json_data:
-            segment_id2data[data_i["segment_id"]] = {"class_labels": data_i["class_labels"], "boxes": data_i["boxes"]}
-        self.json_data = segment_id2data
-    
-    def labels2ids(self, class_labels, boxes):
-        class_labels_ids = list()
-        boxes_labels_ids = list()
+class CustomDataCollator:
+    def __init__(self, tokenizer):
+        self.tokenizer = tokenizer
+        self.data_collator = DataCollatorWithPadding(tokenizer)
 
-        sentence_ids = list()
-        label2ids = dict()
-        
-        for ids, label in enumerate(class_labels):
-            label2ids.setdefault(label, list()).append(ids)
-        
-        for label in set(class_labels):
-            start_ids = len(sentence_ids) + 1
-            label_ids = self.processor.tokenizer.encode(label+".", add_special_tokens=False)
-            sentence_ids.extend(label_ids)
-
-            for ids in label2ids[label]:
-                for i in range(len(label_ids)-1):
-                    class_labels_ids.append(start_ids+i)
-                    boxes_labels_ids.append(boxes[ids])
-
-        sentence_ids.pop()
-        sentence = self.processor.tokenizer.decode(sentence_ids)
-
-        return sentence, class_labels_ids, boxes_labels_ids
-    
     def __call__(self, features):
-        import torch
+        text_features = [{
+            "input_ids": feature["input_ids"],
+            "attention_mask": feature["attention_mask"],
+            "token_type_ids": feature["token_type_ids"]
+        } for feature in features]
+        
+        collated_text_features = self.data_collator(text_features)
 
-        text_list, audio_list, labels_list = [], [], []
-        for i in range(len(features)):
-            segment_id = features[i]["audio"]["path"].rsplit("/", 1)[-1].split(".", 1)[0]
-            sentence, class_labels_ids, boxes_labels_ids = self.labels2ids(self.json_data[segment_id]["class_labels"], self.json_data[segment_id]["boxes"])
-            audio_list.append(features[i]["audio"]["array"])
-            text_list.append(sentence)
+        audio_values = [feature["audio_values"] for feature in features]
+        audio_mask = [feature["audio_mask"] for feature in features]
+
+        labels_tensor = []
+        for feature in features:
+            class_labels = torch.tensor(feature["labels"]["class_labels"], dtype=torch.long)
+            boxes = torch.tensor(feature["labels"]["boxes"], dtype=torch.float32)
+            labels_tensor.append({"class_labels": class_labels, "boxes": boxes})
+
+        max_time_length = max(len(values) for values in audio_values)
+        padded_audio_values = []
+        for values in audio_values:
+            padded_time = values + [[0] * len(values[0])] * (max_time_length - len(values))
+            padded_audio_values.append(padded_time)
+
+        padded_audio_mask = [mask + [0] * (max_time_length - len(mask)) for mask in audio_mask]
+
+        # 将所有特征转换为张量
+        collated_features = {
+            "input_ids": collated_text_features["input_ids"],
+            "attention_mask": collated_text_features["attention_mask"],
+            "token_type_ids": collated_text_features["token_type_ids"],
+            "audio_values": torch.tensor(padded_audio_values, dtype=torch.float32),
+            "audio_mask": torch.tensor(padded_audio_mask, dtype=torch.long),
+            "labels": labels_tensor
+        }
+
+        return collated_features
+
             
-            labels_list.append({
-                "class_labels": torch.tensor(class_labels_ids, dtype=torch.long),
-                "boxes": torch.tensor(boxes_labels_ids)
-            })
-        batch = self.processor(audios=audio_list, text=text_list)
-        batch["labels"] = labels_list
-
-        return batch
-
-
 class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundedaudio_pretrained"
         self.data_json_path = "/root/groundedaudio/audioset/audioset_eval_strong_transform.json"
         self.data_audio_dir = "/root/autodl-tmp/audioset_strong/eval"
-        self.output_dir = '/root/autodl-tmp/results'
+        self.output_dir = '/root/results/gaudio'
+        self.cache_dir = "/root/autodl-tmp/.cache"
         # train
         self.start_epoch = 0
         self.num_train_epochs = 30
@@ -88,15 +79,17 @@ class HyperParameters():
         self.seed=100
         self.neftune_noise_alpha=None
         # log
-        self.report_to="none"
+        self.report_to="tensorboard"
         self.logging_steps=100
-        self.run_name="groudingaudio_origin"
+        self.run_name="gaudio_origin"
         # optimizer
         self.learning_rate = 1e-5
         self.weight_decay = 0.0
         self.warmup_ratio=0.1
         self.lr_scheduler_type="cosine"
         self.betas = (0.9, 0.999)
+        # models
+        self.sensevoice_layer = 50
 
 
 # config and make results directories
@@ -111,6 +104,7 @@ with open(os.path.join(cfg.output_dir, "hyperparameters.json"), 'w') as file:
 
 # model
 config = GroundedAudioConfig.from_json_file(os.path.join(cfg.checkpoint_dir, "config.json"))
+config.backbone_layer = cfg.sensevoice_layer
 model = GroundedAudioForObjectDetection(config)
 model.model.freeze_backbone()
 
@@ -119,10 +113,12 @@ params = [param for param in model.parameters() if param.requires_grad]
 optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay, betas=cfg.betas)
 
 # dataset
-dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, split="train", keep_in_memory=False, cache_dir="/root/autodl-tmp/.cache").select(range(20))
+dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, keep_in_memory=False, split="train", cache_dir=cfg.cache_dir).select(range(20))
 processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
+preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
+dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
 dataset = dataset.train_test_split(test_size=0.2, shuffle=True)
-data_collator = DataCollatorWithPadding(processor=processor, json_file=cfg.data_json_path)
+data_collator = CustomDataCollator(processor.tokenizer)
 
 # trainer and train
 trainer = Trainer(
