@@ -32,7 +32,6 @@ logger = logging.get_logger(__name__)
 class GroundingAudioProcessorKwargs(ProcessingKwargs, total=False):
     _defaults = {
         "text_kwargs": {
-            "padding": False,
             "padding": True, 
             "truncation": True, 
             "return_tensors": "pt"

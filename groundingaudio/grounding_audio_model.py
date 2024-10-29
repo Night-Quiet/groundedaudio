@@ -1557,6 +1557,8 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
         else:
             self.reference_points = nn.Embedding(config.num_queries, 2)
 
+        self.config.backbone_load = None
+        self.config.text_backbone_load = None
         self.post_init()
 
     def get_encoder(self):
@@ -1566,11 +1568,15 @@ class GroundingAudioModel(GroundingAudioPreTrainedModel):
         return self.decoder
 
     def freeze_backbone(self):
-        for name, param in self.backbone.conv_encoder.model.named_parameters():
+        for param in self.backbone.conv_encoder.parameters():
+            param.requires_grad_(False)
+        for param in self.text_backbone.parameters():
             param.requires_grad_(False)
 
     def unfreeze_backbone(self):
         for name, param in self.backbone.conv_encoder.model.named_parameters():
+            param.requires_grad_(True)
+        for name, param in self.text_backbone.named_parameters():
             param.requires_grad_(True)
 
     def get_valid_ratio(self, mask):

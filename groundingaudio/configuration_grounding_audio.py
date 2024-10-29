@@ -18,7 +18,8 @@ from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
 from transformers.utils.backbone_utils import verify_backbone_config_arguments
 from transformers import CONFIG_MAPPING
-
+import copy
+import json
 
 logger = logging.get_logger(__name__)
 
@@ -94,6 +95,10 @@ class SenseVoiceConfig(PretrainedConfig):
             **kwargs
         ):
         self.specaug = specaug
+        if specaug_conf is None:
+            specaug_conf = {}
+        if encoder_conf is None:
+            encoder_conf = {}
         self.specaug_conf = SpecAugConfig(**specaug_conf)
         self.encoder_conf = SenseVoiceEncoderConfig(**encoder_conf)
         self.normalize = normalize
@@ -101,6 +106,15 @@ class SenseVoiceConfig(PretrainedConfig):
         self.input_size = input_size
         self.ignore_id = ignore_id
         super().__init__(**kwargs)
+    
+    def to_dict(self):
+        output = {}
+        for key, value in self.__dict__.items():
+            if hasattr(value, "to_dict"):
+                output[key] = value.to_dict()
+            else:
+                output[key] = value
+        return output
 
 
 class GroundingAudioConfig(PretrainedConfig):
@@ -159,7 +173,10 @@ class GroundingAudioConfig(PretrainedConfig):
         layer_norm_eps=1e-5,
         **kwargs,
     ):
-        # Audio encoder backbone
+        super().__init__(is_encoder_decoder=is_encoder_decoder, **kwargs)
+        # Audio encoder backbone'
+        if backbone_config is None:
+            backbone_config = {}
         self.backbone_config = SenseVoiceConfig(**backbone_config)
         # Text encoder backbone
         if isinstance(text_config, dict):
@@ -217,7 +234,6 @@ class GroundingAudioConfig(PretrainedConfig):
         self.positional_embedding_temperature = positional_embedding_temperature
         self.init_std = init_std
         self.layer_norm_eps = layer_norm_eps
-        super().__init__(is_encoder_decoder=is_encoder_decoder, **kwargs)
 
     @property
     def num_attention_heads(self) -> int:
