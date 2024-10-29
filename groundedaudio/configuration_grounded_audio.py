@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Grounding Audio model configuration"""
+"""Grounded Audio model configuration"""
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
@@ -106,19 +106,10 @@ class SenseVoiceConfig(PretrainedConfig):
         self.input_size = input_size
         self.ignore_id = ignore_id
         super().__init__(**kwargs)
-    
-    def to_dict(self):
-        output = {}
-        for key, value in self.__dict__.items():
-            if hasattr(value, "to_dict"):
-                output[key] = value.to_dict()
-            else:
-                output[key] = value
-        return output
 
 
-class GroundingAudioConfig(PretrainedConfig):
-    model_type = "grounding-audio"
+class GroundedAudioConfig(PretrainedConfig):
+    model_type = "grounded-audio"
     attribute_map = {
         "hidden_size": "d_model",
         "num_attention_heads": "encoder_attention_heads",

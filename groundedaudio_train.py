@@ -9,9 +9,9 @@ from datasets import load_dataset
 from datasets import load_dataset
 from transformers import TrainingArguments, Trainer
 from utils import AudioSetSLPreprocessor
-from groundingaudio.processing_grounding_audio import GroundingAudioProcessor
-from groundingaudio.grounding_audio_model import GroundingAudioForObjectDetection
-from groundingaudio.configuration_grounding_audio import GroundingAudioConfig
+from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
+from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
+from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
 
 
 class DataCollatorWithPadding:
@@ -73,8 +73,8 @@ class DataCollatorWithPadding:
 class HyperParameters():
     def __init__(self) -> None:
         # paths
-        self.checkpoint_dir = "/root/groundingaudio_pretrained"
-        self.data_json_path = "/root/groundingaudio/audioset/audioset_eval_strong_transform.json"
+        self.checkpoint_dir = "/root/groundedaudio_pretrained"
+        self.data_json_path = "/root/groundedaudio/audioset/audioset_eval_strong_transform.json"
         self.data_audio_dir = "/root/autodl-tmp/audioset_strong/eval"
         self.output_dir = '/root/autodl-tmp/results'
         # train
@@ -110,8 +110,8 @@ with open(os.path.join(cfg.output_dir, "hyperparameters.json"), 'w') as file:
     file.write(json_string)
 
 # model
-config = GroundingAudioConfig.from_json_file(os.path.join(cfg.checkpoint_dir, "config.json"))
-model = GroundingAudioForObjectDetection(config)
+config = GroundedAudioConfig.from_json_file(os.path.join(cfg.checkpoint_dir, "config.json"))
+model = GroundedAudioForObjectDetection(config)
 model.model.freeze_backbone()
 
 # optimizer
@@ -119,8 +119,8 @@ params = [param for param in model.parameters() if param.requires_grad]
 optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay, betas=cfg.betas)
 
 # dataset
-dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, split="train", keep_in_memory=False, cache_dir="/root/autodl-tmp/.cache")
-processor = GroundingAudioProcessor.from_pretrained(cfg.checkpoint_dir)
+dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, split="train", keep_in_memory=False, cache_dir="/root/autodl-tmp/.cache").select(range(20))
+processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 dataset = dataset.train_test_split(test_size=0.2, shuffle=True)
 data_collator = DataCollatorWithPadding(processor=processor, json_file=cfg.data_json_path)
 

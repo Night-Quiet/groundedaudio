@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Processor class for Grounding Audio.
+Processor class for Grounded Audio.
 """
 
 from typing import Unpack
@@ -22,14 +22,14 @@ from transformers.feature_extraction_utils import BatchFeature
 from transformers.processing_utils import ProcessingKwargs, ProcessorMixin
 from transformers.utils import logging
 from transformers import FEATURE_EXTRACTOR_MAPPING
-from .feature_extraction_grounding_audio import GroundingAudioFeatureExtractor
-FEATURE_EXTRACTOR_MAPPING.register("GroundingAudioFeatureExtractor", GroundingAudioFeatureExtractor)
+from .feature_extraction_grounded_audio import GroundedAudioFeatureExtractor
+FEATURE_EXTRACTOR_MAPPING.register("GroundedAudioFeatureExtractor", GroundedAudioFeatureExtractor)
 
 
 logger = logging.get_logger(__name__)
 
 
-class GroundingAudioProcessorKwargs(ProcessingKwargs, total=False):
+class GroundedAudioProcessorKwargs(ProcessingKwargs, total=False):
     _defaults = {
         "text_kwargs": {
             "padding": True, 
@@ -40,7 +40,7 @@ class GroundingAudioProcessorKwargs(ProcessingKwargs, total=False):
     }
 
 
-class GroundingAudioProcessor(ProcessorMixin):
+class GroundedAudioProcessor(ProcessorMixin):
     attributes = ["audio_processor", "tokenizer"]
     
     audio_processor_class = "AutoFeatureExtractor"
@@ -57,10 +57,10 @@ class GroundingAudioProcessor(ProcessorMixin):
         self,
         audios=None,
         text=None,
-        **kwargs: Unpack[GroundingAudioProcessorKwargs],
+        **kwargs: Unpack[GroundedAudioProcessorKwargs],
     ) -> BatchFeature:
         output_kwargs = self._merge_kwargs(
-            GroundingAudioProcessorKwargs,
+            GroundedAudioProcessorKwargs,
             tokenizer_init_kwargs=self.tokenizer.init_kwargs,
             **kwargs,
         )
