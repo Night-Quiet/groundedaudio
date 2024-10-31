@@ -1,5 +1,4 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 import json
@@ -10,7 +9,6 @@ from transformers import TrainingArguments, Trainer
 from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
 from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
 from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
-from utils import AudioSetSLPreprocessor
 
 
 from transformers import DataCollatorWithPadding
@@ -64,15 +62,15 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundedaudio_pretrained"
-        self.data_json_path = "/root/groundedaudio/audioset/audioset_train_strong_transform.json"
-        self.data_audio_dir = "/root/autodl-tmp/audioset_strong/train"
+        self.data_json_path = "/root/groundedaudio/audioset/label.json"
+        self.data_audio_dir = "/root/autodl-tmp/processed_dataset"
         self.output_dir = '/root/autodl-tmp/gaudio'
         self.cache_dir = "/root/autodl-tmp/.cache"
         # train
         self.start_epoch = 0
         self.num_train_epochs = 30
-        self.per_device_train_batch_size = 64
-        self.per_device_eval_batch_size = 64
+        self.per_device_train_batch_size = 128
+        self.per_device_eval_batch_size = 128
         self.eval_strategy="epoch"
         self.save_strategy="epoch"
         self.dataloader_num_workers=10
@@ -80,7 +78,7 @@ class HyperParameters():
         self.neftune_noise_alpha=None
         # log
         # self.report_to="tensorboard"
-        self.logging_steps=100
+        self.logging_steps=25
         self.run_name="gaudio_origin"
         # optimizer
         self.learning_rate = 1e-5
@@ -113,11 +111,8 @@ params = [param for param in model.parameters() if param.requires_grad]
 optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay, betas=cfg.betas)
 
 # dataset
-dataset = load_dataset("audiofolder", data_dir=cfg.data_audio_dir, drop_labels=True, keep_in_memory=False, split="train", cache_dir=cfg.cache_dir)
+dataset = load_dataset("/root/autodl-tmp/processed_dataset", cache_dir=cfg.cache_dir)
 processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
-preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
-dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
-dataset = dataset.train_test_split(test_size=0.2, shuffle=True)
 data_collator = CustomDataCollator(processor.tokenizer)
 
 # trainer and train
@@ -135,10 +130,12 @@ trainer = Trainer(
         bf16=True,
         bf16_full_eval=True,
         remove_unused_columns=False,
-        do_train=True
+        logging_steps=cfg.logging_steps,
+        run_name=cfg.run_name,
+        seed=cfg.seed
     ),
     train_dataset=dataset['train'],
-    eval_dataset=dataset['test'],
+    eval_dataset=dataset['validation'],
     processing_class=processor,
     data_collator=data_collator,
     optimizers=(optimizer, None)

@@ -663,14 +663,16 @@ class GroundedAudioBiMultiHeadAttention(nn.Module):
             audio_attention_mask = (
                 audio_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
             )
-            text_attn_weights.masked_fill_(audio_attention_mask, float("-inf"))
+            # text_attn_weights.masked_fill_(audio_attention_mask, float("-inf"))
+            text_attn_weights.masked_fill_(audio_attention_mask, torch.finfo(text_attn_weights.dtype).min)
 
         text_attn_weights = text_attn_weights.softmax(dim=-1)
 
         # mask language for audio
         if text_attention_mask is not None:
             text_attention_mask = text_attention_mask[:, None, None, :].repeat(1, self.num_heads, 1, 1).flatten(0, 1)
-            attn_weights.masked_fill_(text_attention_mask, float("-inf"))
+            # attn_weights.masked_fill_(text_attention_mask, float("-inf"))
+            attn_weights.masked_fill_(text_attention_mask, torch.finfo(attn_weights.dtype).min)
         audio_attn_weights = attn_weights.softmax(dim=-1)
 
         audio_attn_probs = F.dropout(audio_attn_weights, p=self.dropout, training=self.training)
@@ -1159,10 +1161,12 @@ class GroundedAudioContrastiveEmbedding(nn.Module):
         text_token_mask: torch.BoolTensor,
     ) -> torch.FloatTensor:
         output = audio_hidden_state @ text_hidden_state.transpose(-1, -2)
-        output = output.masked_fill(~text_token_mask[:, None, :], float("-inf"))
+        # output = output.masked_fill(~text_token_mask[:, None, :], float("-inf"))
+        output = output.masked_fill(~text_token_mask[:, None, :], torch.finfo(output.dtype).min)
 
         # padding to max_text_len
-        new_output = torch.full((*output.shape[:-1], self.max_text_len), float("-inf"), device=output.device)
+        # new_output = torch.full((*output.shape[:-1], self.max_text_len), float("-inf"), device=output.device)
+        new_output = torch.full((*output.shape[:-1], self.max_text_len), torch.finfo(output.dtype).min, device=output.device)
         new_output[..., : output.shape[-1]] = output
 
         return new_output
@@ -1878,7 +1882,8 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
         Loss tensor
     """
     prob = inputs.sigmoid()
-    ce_loss = nn.functional.binary_cross_entropy(prob, targets, reduction="none")
+    # ce_loss = nn.functional.binary_cross_entropy(prob, targets, reduction="none")
+    ce_loss = nn.functional.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
     # add modulating factor
     p_t = prob * targets + (1 - prob) * (1 - targets)
     loss = ce_loss * ((1 - p_t) ** gamma)
