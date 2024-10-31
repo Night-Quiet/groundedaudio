@@ -201,10 +201,11 @@ def audioset_csv_process():
 if __name__ == "__main__":
     # sensevoice_pytorch_save("/root/groundedaudio/SenseVoiceSmall", "/root/groundedaudio/sensevoice_pytorch")
     # sensevoice_pytorch_load("/root/groundedaudio/sensevoice_pytorch")
-    bert_pytorch_save("/root/autodl-tmp/bert-base-uncased")
+    # bert_pytorch_save("/root/autodl-tmp/bert-base-uncased")
     # audioset_csv_process()
     # audioset_strong_copy()
+    # print(float("-inf"))
+    print(torch.finfo().min)
     pass
-
 
 

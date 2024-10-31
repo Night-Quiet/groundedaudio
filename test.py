@@ -59,7 +59,9 @@ def groundeddino_inference_demo():
 
  
 def groundedaudio_inference_demo():
-    file_path = ["/root/autodl-tmp/audioset_strong/eval/Y--4gqARaEJE.wav", "/root/autodl-tmp/audioset_strong/eval/Y--BfvyPmVMo.wav"]
+    from targetedmind.modules.sensevoice.utils import load_audio_text_image_video
+    
+    file_path = ["/root/autodl-tmp/audioset_strong/val/YP996TZp25PM.wav", "/root/autodl-tmp/audioset_strong/val/Yt7qb5pBcBY4.wav"]
     sentences = ["this is a speech. this is a output. this is a audio. this is a output. this is a audio", "this is a output. this is a audio. this is a output. this is a audio. this is a output. this is a audio"]
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     device = "cpu"
@@ -67,7 +69,7 @@ def groundedaudio_inference_demo():
     config = GroundedAudioConfig.from_json_file("/root/groundedaudio_pretrained/config.json")
     processor = GroundedAudioProcessor.from_pretrained("/root/groundedaudio_pretrained")
 
-    inputs = processor(audios=file_path, text=sentences, device=device)
+    inputs = processor(audios=load_audio_text_image_video(file_path, fs=32000), text=sentences)
     
     targets = []
     bs, seq_len = inputs.input_ids.shape
@@ -82,7 +84,7 @@ def groundedaudio_inference_demo():
     model = GroundedAudioForObjectDetection(config).to(device)
     model_output = model(
         audio_values=inputs.audio_values,
-        audio_mask=inputs.audio_attention_mask,
+        audio_mask=inputs.audio_mask,
         input_ids=inputs.input_ids,
         attention_mask=inputs.attention_mask,
         token_type_ids=inputs.token_type_ids,
@@ -121,22 +123,9 @@ def demo():
 
 
 if __name__ == "__main__":
-    # groundeddino_inference_demo()
-    # groundedaudio_inference_demo()
-    # processor = GroundedAudioProcessor.from_pretrained("/root/groundedaudio_pretrained")
-    # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file="/root/groundedaudio/audioset/audioset_eval_strong_transform.json")
-    # dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong/eval", drop_labels=True, split="train").select(range(40))
-    # dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"], batch_size=20)
-    # for key, value in dataset[0].items():
-    #     if key != "audio_values":
-    #         print(key, value)
-    # print(torch.tensor(dataset[0]["audio_values"]).shape)
-    from transformers import AutoConfig
-    # bert_config = AutoConfig.from_pretrained("/root/autodl-tmp/bert-base-uncased")
-    # print(bert_config.__class__())
-    # print(bert_config.to_json_string())
-    model = GroundedAudioForObjectDetection.from_pretrained("/root/autodl-tmp/results/10-29-11-53/checkpoint-40")
-    print(model.config)
+    groundedaudio_inference_demo()
+    # print(torch)
+    pass
     
 
     
