@@ -1,5 +1,6 @@
 import os
 import torch
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 torch.backends.cuda.matmul.allow_tf32 = True
 import json
 from time import localtime, time
@@ -9,10 +10,12 @@ from transformers import TrainingArguments, Trainer
 from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
 from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
 from groundedaudio.configuration_grounded_audio import GroundedAudioConfig
+from utils import AudioSetSLPreprocessor
 
 
 from transformers import DataCollatorWithPadding
 import torch
+
 
 class CustomDataCollator:
     def __init__(self, tokenizer):
@@ -35,6 +38,16 @@ class CustomDataCollator:
         for feature in features:
             class_labels = torch.tensor(feature["labels"]["class_labels"], dtype=torch.long)
             boxes = torch.tensor(feature["labels"]["boxes"], dtype=torch.float32)
+
+            # print("before", class_labels.shape, boxes.shape)
+
+            # mask = ~torch.all(boxes == torch.tensor([5.0, 5.0]), dim=-1)
+            # if (~mask).sum() != class_labels.shape[0]:
+            # class_labels = class_labels[mask].view(-1)
+            # boxes = boxes[mask].view(-1, 2)
+
+            # print("after", class_labels.shape, boxes.shape)
+
             labels_tensor.append({"class_labels": class_labels, "boxes": boxes})
 
         max_time_length = max(len(values) for values in audio_values)
@@ -62,8 +75,8 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundedaudio_pretrained"
-        self.data_json_path = "/root/groundedaudio/audioset/label.json"
-        self.data_audio_dir = "/root/autodl-tmp/processed_dataset"
+        self.data_json_path = "/root/groundedaudio/audioset/label_del_weak.json"
+        self.data_audio_dir = "/root/autodl-tmp/processed_dataset_del_weak"
         self.output_dir = '/root/autodl-tmp/gaudio'
         self.cache_dir = "/root/autodl-tmp/.cache"
         # train
@@ -111,8 +124,13 @@ params = [param for param in model.parameters() if param.requires_grad]
 optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.weight_decay, betas=cfg.betas)
 
 # dataset
-dataset = load_dataset("/root/autodl-tmp/processed_dataset", cache_dir=cfg.cache_dir)
+dataset = load_dataset(cfg.data_audio_dir, cache_dir=cfg.cache_dir)
+# dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong_del_weak", drop_labels=True, keep_in_memory=False, cache_dir=cfg.cache_dir)
 processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
+# preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
+# dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
+# dataset.save_to_disk("/root/autodl-tmp/processed_dataset_del_weak", num_proc=10)
+
 data_collator = CustomDataCollator(processor.tokenizer)
 
 # trainer and train
