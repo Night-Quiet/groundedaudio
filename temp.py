@@ -358,8 +358,35 @@ def demo():
     pass
 
 
+def inference():
+    from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
+    from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
+    import torchaudio
+
+
+    model_id = "/root/autodl-tmp/gaudio/11-3-17-32/checkpoint-184"
+    device = "cpu"
+
+    processor = GroundedAudioProcessor.from_pretrained(model_id)
+    model = GroundedAudioForObjectDetection.from_pretrained(model_id).to(device)
+
+    audios, fs = torchaudio.load("/root/autodl-tmp/audioset_strong_del_weak/val/Y--4gqARaEJE.wav")
+
+    text = "Squeak.Dog"
+
+    inputs = processor(audios=audios, text=text).to(device)
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    results = processor.post_process_grounded_object_detection(
+        outputs,
+        inputs.input_ids,
+        box_threshold=0.1,
+        text_threshold=0.1
+    )
+    print(results)
 
 
 if __name__ == "__main__":
-    audioset_del_weak()
+    inference()
     pass

@@ -16,6 +16,7 @@
 Processor class for Grounded Audio.
 """
 
+import torch
 from typing import Unpack
 
 from transformers.feature_extraction_utils import BatchFeature
@@ -23,10 +24,29 @@ from transformers.processing_utils import ProcessingKwargs, ProcessorMixin
 from transformers.utils import logging
 from transformers import FEATURE_EXTRACTOR_MAPPING
 from .feature_extraction_grounded_audio import GroundedAudioFeatureExtractor
+from .grounded_audio_model import center_to_corners_one_dim
 FEATURE_EXTRACTOR_MAPPING.register("GroundedAudioFeatureExtractor", GroundedAudioFeatureExtractor)
 
 
 logger = logging.get_logger(__name__)
+
+
+def get_phrases_from_posmap(posmaps, input_ids):
+    left_idx = 0
+    right_idx = posmaps.shape[-1] - 1
+
+    # Avoiding altering the input tensor
+    posmaps = posmaps.clone()
+
+    posmaps[:, 0 : left_idx + 1] = False
+    posmaps[:, right_idx:] = False
+
+    token_ids = []
+    for posmap in posmaps:
+        non_zero_idx = posmap.nonzero(as_tuple=True)[0].tolist()
+        token_ids.append([input_ids[i] for i in non_zero_idx])
+
+    return token_ids
 
 
 class GroundedAudioProcessorKwargs(ProcessingKwargs, total=False):
@@ -75,3 +95,29 @@ class GroundedAudioProcessor(ProcessorMixin):
         tokenizer_input_names = self.tokenizer.model_input_names
         audio_processor_input_names = self.audio_processor.model_input_names
         return list(dict.fromkeys(tokenizer_input_names + audio_processor_input_names))
+
+
+    def post_process_grounded_object_detection(
+        self,
+        outputs,
+        input_ids,
+        box_threshold=0.25,
+        text_threshold=0.25,
+    ):
+        logits, boxes = outputs.logits, outputs.pred_boxes
+
+        probs = torch.sigmoid(logits)  # (batch_size, num_queries, 256)
+        scores = torch.max(probs, dim=-1)[0]  # (batch_size, num_queries)
+
+        boxes = center_to_corners_one_dim(boxes)
+
+        results = []
+        for idx, (s, b, p) in enumerate(zip(scores, boxes, probs)):
+            score = s[s > box_threshold]
+            box = b[s > box_threshold]
+            prob = p[s > box_threshold]
+            label_ids = get_phrases_from_posmap(prob > text_threshold, input_ids[idx])
+            label = self.tokenizer.batch_decode(label_ids)
+            results.append({"scores": score, "labels": label, "boxes": box})
+
+        return results

@@ -1772,36 +1772,10 @@ class GroundedAudioMLPPredictionHead(nn.Module):
         return x
 
 
-# Copied from transformers.models.detr.modeling_detr._upcast
-def _upcast(t: Tensor) -> Tensor:
-    # Protects from numerical overflows in multiplications by upcasting to the equivalent higher type
-    if t.is_floating_point():
-        return t if t.dtype in (torch.float32, torch.float64) else t.float()
-    else:
-        return t if t.dtype in (torch.int32, torch.int64) else t.int()
-
-
-# Copied from transformers.models.detr.modeling_detr.box_area
-def box_area(boxes: Tensor) -> Tensor:
-    """
-    Computes the area of a set of bounding boxes, which are specified by its (x1, y1, x2, y2) coordinates.
-
-    Args:
-        boxes (`torch.FloatTensor` of shape `(number_of_boxes, 4)`):
-            Boxes for which the area will be computed. They are expected to be in (x1, y1, x2, y2) format with `0 <= x1
-            < x2` and `0 <= y1 < y2`.
-
-    Returns:
-        `torch.FloatTensor`: a tensor containing the area for each box.
-    """
-    # boxes = _upcast(boxes)
-    return boxes[:, 1] - boxes[:, 0]
-
-
 # Copied from transformers.models.detr.modeling_detr.box_iou
 def box_iou(boxes1, boxes2):
-    area1 = box_area(boxes1)
-    area2 = box_area(boxes2)
+    area1 = boxes1[:, 1] - boxes1[:, 0]
+    area2 = boxes2[:, 1] - boxes2[:, 0]
 
     left = torch.max(boxes1[:, None, 0], boxes2[:, 0])
     right = torch.min(boxes1[:, None, 1], boxes2[:, 1])
@@ -1830,36 +1804,6 @@ def generalized_box_iou(boxes1, boxes2):
 
     area = (bottom - top).clamp(min=0)
     return iou - (area - union) / area
-
-
-# Copied from transformers.models.detr.modeling_detr._max_by_axis
-def _max_by_axis(the_list):
-    # type: (List[List[int]]) -> List[int]
-    maxes = the_list[0]
-    for sublist in the_list[1:]:
-        for index, item in enumerate(sublist):
-            maxes[index] = max(maxes[index], item)
-    return maxes
-
-
-# Copied from transformers.models.detr.modeling_detr.dice_loss
-def dice_loss(inputs, targets, num_boxes):
-    """
-    Compute the DICE loss, similar to generalized IOU for masks
-
-    Args:
-        inputs: A float tensor of arbitrary shape.
-                The predictions for each example.
-        targets: A float tensor with the same shape as inputs. Stores the binary
-                 classification label for each element in inputs (0 for the negative class and 1 for the positive
-                 class).
-    """
-    inputs = inputs.sigmoid()
-    inputs = inputs.flatten(1)
-    numerator = 2 * (inputs * targets).sum(1)
-    denominator = inputs.sum(-1) + targets.sum(-1)
-    loss = 1 - (numerator + 1) / (denominator + 1)
-    return loss.sum() / num_boxes
 
 
 # Copied from transformers.models.detr.modeling_detr.sigmoid_focal_loss
@@ -1893,46 +1837,6 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
         loss = alpha_t * loss
 
     return loss.mean(1).sum() / num_boxes
-
-
-# Copied from transformers.models.detr.modeling_detr.NestedTensor
-class NestedTensor:
-    def __init__(self, tensors, mask: Optional[Tensor]):
-        self.tensors = tensors
-        self.mask = mask
-
-    def to(self, device):
-        cast_tensor = self.tensors.to(device)
-        mask = self.mask
-        if mask is not None:
-            cast_mask = mask.to(device)
-        else:
-            cast_mask = None
-        return NestedTensor(cast_tensor, cast_mask)
-
-    def decompose(self):
-        return self.tensors, self.mask
-
-    def __repr__(self):
-        return str(self.tensors)
-
-
-# Copied from transformers.models.detr.modeling_detr.nested_tensor_from_tensor_list
-def nested_tensor_from_tensor_list(tensor_list: List[Tensor]):
-    if tensor_list[0].ndim == 3:
-        max_size = _max_by_axis([list(img.shape) for img in tensor_list])
-        batch_shape = [len(tensor_list)] + max_size
-        batch_size, num_channels, height, width = batch_shape
-        dtype = tensor_list[0].dtype
-        device = tensor_list[0].device
-        tensor = torch.zeros(batch_shape, dtype=dtype, device=device)
-        mask = torch.ones((batch_size, height, width), dtype=torch.bool, device=device)
-        for img, pad_img, m in zip(tensor_list, tensor, mask):
-            pad_img[: img.shape[0], : img.shape[1], : img.shape[2]].copy_(img)
-            m[: img.shape[1], : img.shape[2]] = False
-    else:
-        raise ValueError("Only 3-dimensional tensors are supported")
-    return NestedTensor(tensor, mask)
 
 
 def center_to_corners_one_dim(bbox):
@@ -1971,7 +1875,7 @@ class GroundedAudioHungarianMatcher(nn.Module):
         # num labels: [num_labels, label_len]: label_len不同尺寸1, 2, 3, 4, 5, 6, 7, 8
         neg_cost_class = (1 - alpha) * (out_prob**gamma) * (-(1 - out_prob + 1e-8).log())  # [batch_size, num_queries, num_classes]
         pos_cost_class = alpha * ((1 - out_prob) ** gamma) * (-(out_prob + 1e-8).log())  # [batch_size, num_queries, num_classes]
-        class_cost = pos_cost_class[:, target_ids] - neg_cost_class[:, target_ids]  # [batch size*num_query, batch size*num_labels, len_labels]
+        class_cost = pos_cost_class[:, target_ids] - neg_cost_class[:, target_ids]  # [batch size*num_query, len_labels]
         # # [batch size*num_query, batch size*num_labels*len_labels]
 
         # Compute the L1 cost between boxes: 不用管batch, 下面分开就好.
@@ -2009,15 +1913,10 @@ class GroundedAudioLoss(nn.Module):
             raise KeyError("No logits were found in the outputs")
         source_logits = outputs["logits"]
 
-        # joblib.dump(source_logits, "./temp/source_logits.joblib")
-        # joblib.dump(targets, "./temp/targets.joblib")
-        # joblib.dump(indices, "./temp/indices.joblib")
-        # exit()
-
         idx = self._get_source_permutation_idx(indices)
         target_classes_o = torch.cat([t["class_labels"][J] for t, (_, J) in zip(targets, indices)])
         target_classes = torch.full(
-            source_logits.shape[:2], self.num_classes, dtype=torch.int64, device=source_logits.device
+            source_logits.shape[:2], source_logits.shape[2], dtype=torch.int64, device=source_logits.device
         )
         target_classes[idx] = target_classes_o
 

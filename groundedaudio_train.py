@@ -1,7 +1,7 @@
 import os
 import torch
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-torch.backends.cuda.matmul.allow_tf32 = True
+# torch.backends.cuda.matmul.allow_tf32 = True
 import json
 from time import localtime, time
 from datasets import load_dataset
@@ -38,16 +38,6 @@ class CustomDataCollator:
         for feature in features:
             class_labels = torch.tensor(feature["labels"]["class_labels"], dtype=torch.long)
             boxes = torch.tensor(feature["labels"]["boxes"], dtype=torch.float32)
-
-            # print("before", class_labels.shape, boxes.shape)
-
-            # mask = ~torch.all(boxes == torch.tensor([5.0, 5.0]), dim=-1)
-            # if (~mask).sum() != class_labels.shape[0]:
-            # class_labels = class_labels[mask].view(-1)
-            # boxes = boxes[mask].view(-1, 2)
-
-            # print("after", class_labels.shape, boxes.shape)
-
             labels_tensor.append({"class_labels": class_labels, "boxes": boxes})
 
         max_time_length = max(len(values) for values in audio_values)
@@ -100,7 +90,7 @@ class HyperParameters():
         self.lr_scheduler_type="cosine"
         self.betas = (0.9, 0.999)
         # models
-        self.sensevoice_layer = 50
+        self.sensevoice_layer = 20
 
 
 # config and make results directories
@@ -130,7 +120,6 @@ processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
 # dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
 # dataset.save_to_disk("/root/autodl-tmp/processed_dataset_del_weak", num_proc=10)
-
 data_collator = CustomDataCollator(processor.tokenizer)
 
 # trainer and train
