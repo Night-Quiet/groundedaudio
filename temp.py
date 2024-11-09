@@ -362,9 +362,9 @@ def inference():
     from groundedaudio.processing_grounded_audio import GroundedAudioProcessor
     from groundedaudio.grounded_audio_model import GroundedAudioForObjectDetection
     import torchaudio
+    from transformers import BertTokenizer
 
-
-    model_id = "/root/autodl-tmp/gaudio/11-3-17-32/checkpoint-184"
+    model_id = "/root/autodl-tmp/gaudio/11-4-9-34/checkpoint-1472"
     device = "cpu"
 
     processor = GroundedAudioProcessor.from_pretrained(model_id)
@@ -381,12 +381,14 @@ def inference():
     results = processor.post_process_grounded_object_detection(
         outputs,
         inputs.input_ids,
-        box_threshold=0.1,
-        text_threshold=0.1
+        box_threshold=0.2,
+        text_threshold=0.2,
+        target_size=audios.shape[1] / fs
     )
     print(results)
 
 
 if __name__ == "__main__":
     inference()
+    # print(torch.tensor(0, dtype=torch.float16))
     pass

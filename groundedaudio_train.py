@@ -65,8 +65,8 @@ class HyperParameters():
     def __init__(self) -> None:
         # paths
         self.checkpoint_dir = "/root/groundedaudio_pretrained"
-        self.data_json_path = "/root/groundedaudio/audioset/label_del_weak.json"
-        self.data_audio_dir = "/root/autodl-tmp/processed_dataset_del_weak"
+        self.data_json_path = "/root/groundedaudio/audioset/label.json"
+        self.data_audio_dir = "/root/autodl-tmp/processed_dataset"
         self.output_dir = '/root/autodl-tmp/gaudio'
         self.cache_dir = "/root/autodl-tmp/.cache"
         # train
@@ -90,7 +90,7 @@ class HyperParameters():
         self.lr_scheduler_type="cosine"
         self.betas = (0.9, 0.999)
         # models
-        self.sensevoice_layer = 20
+        self.sensevoice_layer = 50
 
 
 # config and make results directories
@@ -115,11 +115,11 @@ optimizer = torch.optim.AdamW(params, lr=cfg.learning_rate, weight_decay=cfg.wei
 
 # dataset
 dataset = load_dataset(cfg.data_audio_dir, cache_dir=cfg.cache_dir)
-# dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong_del_weak", drop_labels=True, keep_in_memory=False, cache_dir=cfg.cache_dir)
+# dataset = load_dataset("audiofolder", data_dir="/root/autodl-tmp/audioset_strong", drop_labels=True, keep_in_memory=False, cache_dir=cfg.cache_dir)
 processor = GroundedAudioProcessor.from_pretrained(cfg.checkpoint_dir)
 # preprocessor = AudioSetSLPreprocessor(processor=processor, json_file=cfg.data_json_path)
 # dataset = dataset.map(preprocessor, batched=True, remove_columns=["audio"])
-# dataset.save_to_disk("/root/autodl-tmp/processed_dataset_del_weak", num_proc=10)
+# dataset.save_to_disk("/root/autodl-tmp/processed_dataset", num_proc=10)
 data_collator = CustomDataCollator(processor.tokenizer)
 
 # trainer and train

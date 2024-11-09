@@ -47,10 +47,12 @@ class AudioSetSLPreprocessor():
             sentence, class_labels_ids, boxes_labels_ids = self.labels2ids(self.json_data[segment_id]["class_labels"], self.json_data[segment_id]["boxes"])
             audio_list.append(examples["audio"][i]["array"])
             text_list.append(sentence)
+
+            audio_time_len = examples["audio"][i]["array"].shape[0] / examples["audio"][i]["sampling_rate"]
             
             labels_list.append({
                 "class_labels": torch.tensor(class_labels_ids, dtype=torch.long),
-                "boxes": torch.tensor(boxes_labels_ids)
+                "boxes": torch.tensor(boxes_labels_ids) / audio_time_len
             })
         inputs = self.processor(audios=audio_list, text=text_list)
         inputs["labels"] = labels_list

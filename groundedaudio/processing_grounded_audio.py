@@ -103,12 +103,15 @@ class GroundedAudioProcessor(ProcessorMixin):
         input_ids,
         box_threshold=0.25,
         text_threshold=0.25,
+        target_size=None,
     ):
         logits, boxes = outputs.logits, outputs.pred_boxes
 
         probs = torch.sigmoid(logits)  # (batch_size, num_queries, 256)
         scores = torch.max(probs, dim=-1)[0]  # (batch_size, num_queries)
 
+        if target_size is not None:
+            boxes = boxes * target_size
         boxes = center_to_corners_one_dim(boxes)
 
         results = []
